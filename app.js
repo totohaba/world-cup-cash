@@ -275,7 +275,68 @@ function getTeamEmblem(match, side) {
 }
 
 function getTeamPlayerImage(match, side) {
-  return getAssetPath(getTeam(match, side)?.starPlayerImage);
+  const source = getTeam(match, side)?.starPlayerImage;
+
+  if (!source) {
+    return "";
+  }
+
+  return source.replace("players/", "assets/featured-players/");
+}
+
+function getTeamCode(team, slug) {
+  const codes = {
+    algeria: "ALG",
+    argentina: "ARG",
+    australia: "AUS",
+    austria: "AUT",
+    belgium: "BEL",
+    "bosnia-herzegovina": "BIH",
+    brazil: "BRA",
+    canada: "CAN",
+    "cape-verde": "CPV",
+    colombia: "COL",
+    "cote-divoire": "CIV",
+    croatia: "CRO",
+    curacao: "CUW",
+    czechia: "CZE",
+    "dr-congo": "COD",
+    ecuador: "ECU",
+    egypt: "EGY",
+    england: "ENG",
+    france: "FRA",
+    germany: "GER",
+    ghana: "GHA",
+    haiti: "HAI",
+    iran: "IRN",
+    iraq: "IRQ",
+    japan: "JPN",
+    jordan: "JOR",
+    mexico: "MEX",
+    morocco: "MAR",
+    netherlands: "NED",
+    "new-zealand": "NZL",
+    norway: "NOR",
+    panama: "PAN",
+    paraguay: "PAR",
+    portugal: "POR",
+    qatar: "QAT",
+    "saudi-arabia": "KSA",
+    scotland: "SCO",
+    senegal: "SEN",
+    "south-africa": "RSA",
+    "south-korea": "KOR",
+    spain: "ESP",
+    sweden: "SWE",
+    switzerland: "SUI",
+    tunisia: "TUN",
+    turkiye: "TUR",
+    "united-states": "USA",
+    uruguay: "URU",
+    uzbekistan: "UZB",
+  };
+
+  return codes[slug] || String(team?.team || slug || "").slice(0, 3).toUpperCase();
 }
 
 function formatMatchDateTime(value) {
@@ -707,7 +768,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
         <article class="match-row-card" data-open-match="${match.matchId}">
           <div class="match-row-team">
             ${teamAFlag ? `<img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
-            <strong>${match.teamA.team}</strong>
+            <strong>${getTeamCode(match.teamA, match.teamASlug)}</strong>
           </div>
           <div class="match-row-center">
             <span>${match.phase}</span>
@@ -716,7 +777,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
           </div>
           <div class="match-row-team right">
             ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
-            <strong>${match.teamB.team}</strong>
+            <strong>${getTeamCode(match.teamB, match.teamBSlug)}</strong>
           </div>
           <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
           <p class="match-list-status">${pickStatusLabel}</p>

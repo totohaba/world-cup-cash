@@ -16,7 +16,7 @@
 
 body {
   margin: 0;
-  background: var(--green-dark);
+  background: #003823;
   color: var(--text);
 }
 
@@ -31,8 +31,8 @@ a {
   margin: 0 auto;
   padding: 42px 18px 104px;
   background:
-    radial-gradient(circle at 20% 0%, rgba(216, 169, 40, 0.2), transparent 32%),
-    linear-gradient(180deg, #07583b, #033323);
+    radial-gradient(circle at 32% 0%, rgba(216, 169, 40, 0.16), transparent 31%),
+    linear-gradient(180deg, #06472e, #003823 42%, #002f20);
 }
 
 .app-header {
@@ -348,7 +348,7 @@ h1 {
 .featured-player {
   position: absolute;
   bottom: -28px;
-  width: 190px;
+  width: 268px;
   max-width: 150%;
   opacity: 0.9;
   filter: saturate(1.06) contrast(1.03);
@@ -357,11 +357,11 @@ h1 {
 }
 
 .featured-left .featured-player {
-  left: -54px;
+  left: -88px;
 }
 
 .featured-right .featured-player {
-  right: -54px;
+  right: -88px;
 }
 
 .featured-flag {
@@ -1609,8 +1609,16 @@ h1 {
   }
 
   .featured-player {
-    bottom: -22px;
-    width: 162px;
+    bottom: -28px;
+    width: 224px;
+  }
+
+  .featured-left .featured-player {
+    left: -78px;
+  }
+
+  .featured-right .featured-player {
+    right: -78px;
   }
 
   .featured-flag {
@@ -1654,10 +1662,10 @@ h1 {
   }
 
   .match-row-team strong {
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.05;
-    word-break: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   .match-row-center {
