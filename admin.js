@@ -3,6 +3,7 @@ const ADMIN_CONFIG = {
 };
 
 let adminMatches = [];
+let activeStatusFilter = "all";
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -43,7 +44,24 @@ function renderAdminMatches(matches) {
     return;
   }
 
-  list.innerHTML = matches
+  const filteredMatches = matches.filter((match) => {
+    if (activeStatusFilter === "all") {
+      return true;
+    }
+
+    if (activeStatusFilter === "future") {
+      return match.status !== "settled";
+    }
+
+    return match.status === activeStatusFilter;
+  });
+
+  if (!filteredMatches.length) {
+    list.innerHTML = `<p class="empty-state">No matches in this filter.</p>`;
+    return;
+  }
+
+  list.innerHTML = filteredMatches
     .map((match) => {
       const settled = match.status === "settled";
       const teamAGoals = match.teamAGoals ?? "";
@@ -75,6 +93,60 @@ function renderAdminMatches(matches) {
     .join("");
 }
 
+function formatAdminMoney(value, options = {}) {
+  const numberValue = Number(value) || 0;
+
+  return numberValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: options.cents ? 2 : 0,
+    maximumFractionDigits: options.cents ? 2 : 0,
+  });
+}
+
+function renderSettlementLog(logs) {
+  const list = document.querySelector("#settlement-log-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!logs.length) {
+    list.innerHTML = `<p class="empty-state">No settlements yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = logs
+    .map((log) => {
+      return `
+        <article class="settlement-log-row">
+          <div>
+            <strong>${log.playerName}</strong>
+            <span>${log.matchLabel} - ${log.settlementType}</span>
+          </div>
+          <div>
+            <strong>${formatAdminMoney(log.endingBalance, { cents: true })}</strong>
+            <span>Payout ${formatAdminMoney(log.totalPayout, { cents: true })}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function loadSettlementLog() {
+  try {
+    const result = await callAdminApi("getSettlementLog", {
+      limit: 20,
+    });
+
+    renderSettlementLog(result.logs);
+  } catch (error) {
+    console.error(error);
+    document.querySelector("#settlement-log-list").innerHTML = `<p class="empty-state">Could not load settlement log: ${error.message}</p>`;
+  }
+}
+
 async function loadAdminMatches() {
   const status = document.querySelector("#admin-status");
 
@@ -89,6 +161,7 @@ async function loadAdminMatches() {
     adminMatches = matchesResult.matches;
     status.textContent = `${gameState.activePhaseName} - ${matchesResult.count} matches`;
     renderAdminMatches(adminMatches);
+    loadSettlementLog();
   } catch (error) {
     console.error(error);
     status.textContent = `Could not load admin data: ${error.message}`;
@@ -121,6 +194,7 @@ async function handleSettleClick(event) {
 
     status.textContent = `Settled ${result.settledPickCount} picks`;
     await loadAdminMatches();
+    await loadSettlementLog();
   } catch (error) {
     console.error(error);
     status.textContent = `Could not settle: ${error.message}`;
@@ -128,7 +202,23 @@ async function handleSettleClick(event) {
   }
 }
 
+function handleFilterClick(event) {
+  const button = event.target.closest("[data-status-filter]");
+
+  if (!button) {
+    return;
+  }
+
+  activeStatusFilter = button.dataset.statusFilter;
+  document.querySelectorAll("[data-status-filter]").forEach((item) => {
+    item.classList.toggle("active", item === button);
+  });
+  renderAdminMatches(adminMatches);
+}
+
 document.querySelector("#admin-refresh-button")?.addEventListener("click", loadAdminMatches);
+document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
+document.querySelector(".filter-tabs")?.addEventListener("click", handleFilterClick);
 
 loadAdminMatches();

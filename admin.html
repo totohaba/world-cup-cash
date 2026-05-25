@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash Admin</title>
-    <link rel="stylesheet" href="styles.css?v=settlement-2" />
+    <link rel="stylesheet" href="styles.css?v=post-settlement-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -26,9 +26,22 @@
           <h2>Match Results</h2>
           <button id="admin-refresh-button" type="button">Refresh</button>
         </div>
+        <div class="filter-tabs" aria-label="Match status filters">
+          <button class="active" type="button" data-status-filter="all">All</button>
+          <button type="button" data-status-filter="future">Open</button>
+          <button type="button" data-status-filter="settled">Settled</button>
+        </div>
         <div id="admin-matches-list" class="admin-matches-list"></div>
       </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Settlement Log</h2>
+          <button id="log-refresh-button" type="button">Refresh</button>
+        </div>
+        <div id="settlement-log-list" class="settlement-log-list"></div>
+      </section>
     </main>
-    <script src="admin.js?v=settlement-2"></script>
+    <script src="admin.js?v=post-settlement-1"></script>
   </body>
 </html>

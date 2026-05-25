@@ -11,6 +11,7 @@ let activeMatches = [];
 let activePicksByMatch = {};
 let activeLeaderboard = [];
 let activeProfile = null;
+let activePickHistory = [];
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -51,6 +52,24 @@ async function loadPlayerPicks(player, phaseName) {
 
   try {
     const result = await callApi("getPlayerPicks", {
+      playerId: player.player_id,
+      phase: phaseName,
+    });
+
+    return { picks: result.picks, error: null };
+  } catch (error) {
+    console.error(error);
+    return { picks: [], error };
+  }
+}
+
+async function loadPlayerPickHistory(player, phaseName) {
+  if (!player) {
+    return { picks: [], error: null };
+  }
+
+  try {
+    const result = await callApi("getPlayerPickHistory", {
       playerId: player.player_id,
       phase: phaseName,
     });
@@ -126,6 +145,26 @@ function getPickStatusText(pick) {
   }
 
   return `Saved: ${pick.selectedTeam} for ${formatMoney(pick.totalBetAmount)} total bet`;
+}
+
+function getPickOutcomeText(pick) {
+  if (!pick) {
+    return "";
+  }
+
+  if (pick.status === "won") {
+    return `Won ${formatMoney(pick.potentialPayout, { cents: true })}`;
+  }
+
+  if (pick.status === "lost") {
+    return `Lost ${formatMoney(pick.playerCashStake)}`;
+  }
+
+  if (pick.status === "draw") {
+    return "Draw - no money won or lost";
+  }
+
+  return getPickStatusText(pick);
 }
 
 function getAvailableToBet() {
@@ -223,6 +262,42 @@ function renderProfile(profile = activeProfile) {
     .join("");
 }
 
+function renderPickHistory(picks = activePickHistory) {
+  const list = document.querySelector("#profile-picks-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!picks.length) {
+    list.innerHTML = `<p class="empty-state">No picks yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = picks
+    .map((pick) => {
+      const match = pick.match;
+      const label = match
+        ? `${match.teamA.team} vs ${match.teamB.team}`
+        : pick.matchId;
+      const amount = `${formatMoney(pick.totalBetAmount)} at ${pick.decimalOdds}x`;
+
+      return `
+        <article class="pick-history-row">
+          <div>
+            <strong>${label}</strong>
+            <span>Pick: ${pick.selectedTeam} - ${amount}</span>
+          </div>
+          <div class="pick-history-status ${pick.status}">
+            ${pick.status}
+            <span>${getPickOutcomeText(pick)}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function showView(viewName) {
   const views = {
     matches: document.querySelector("#matches-view"),
@@ -268,7 +343,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
       const teamBSelected = savedPick?.selectedTeam === match.teamBSlug ? "selected" : "";
       const finalScore = `${match.teamAGoals} - ${match.teamBGoals}`;
       const statusText = matchComplete
-        ? `Final: ${match.teamA.team} ${finalScore} ${match.teamB.team}`
+        ? `Final: ${match.teamA.team} ${finalScore} ${match.teamB.team}${savedPick ? ` - ${getPickOutcomeText(savedPick)}` : ""}`
         : getPickStatusText(savedPick);
       const maxTotalBet = getMaxTotalBet(savedPick);
       const totalBetAmount = Math.min(
@@ -312,6 +387,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
               step="1"
               value="${totalBetAmount}"
               data-bet-amount
+              ${matchComplete ? "disabled" : ""}
             />
             <span>Max ${formatMoney(maxTotalBet)}</span>
           </div>
@@ -463,9 +539,17 @@ async function loadSummaryData() {
     const profileResult = await callApi("getPlayerProfile", {
       playerId: player.player_id,
     });
+    const historyResult = await loadPlayerPickHistory(player, "");
+
     activeProfile = profileResult.player;
+    activePickHistory = historyResult.picks;
     renderProfile(activeProfile);
+    renderPickHistory(activePickHistory);
     document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
+    activePicksByMatch = {
+      ...activePicksByMatch,
+      ...indexPicksByMatch(activePickHistory),
+    };
     renderMatches(activeMatches, activePicksByMatch);
   } catch (error) {
     console.error(error);
@@ -484,7 +568,7 @@ async function loadGameState() {
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
-    const picksResult = await loadPlayerPicks(player, gameState.activePhaseName);
+    const picksResult = await loadPlayerPickHistory(player, gameState.activePhaseName);
 
     activePicksByMatch = indexPicksByMatch(picksResult.picks);
     await loadSummaryData();

@@ -461,6 +461,21 @@ function normalizePick_(pick) {
   };
 }
 
+function normalizeSettlementLog_(log) {
+  return {
+    settlementId: log.settlement_id,
+    playerId: log.player_id,
+    matchId: log.match_id,
+    pickId: log.pick_id,
+    settlementType: log.settlement_type,
+    startingBalance: Number(log.starting_balance) || 0,
+    playerCashStake: Number(log.player_cash_stake) || 0,
+    totalPayout: Number(log.total_payout) || 0,
+    endingBalance: Number(log.ending_balance) || 0,
+    createdAt: log.created_at,
+  };
+}
+
 function toNumber_(value, fallback) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
@@ -530,6 +545,38 @@ function getPlayerPicks(input) {
   };
 }
 
+function getPlayerPickHistory(input) {
+  if (!input || !input.playerId) {
+    throw new Error("getPlayerPickHistory requires playerId.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const phaseName = input.phase ? String(input.phase).trim() : "";
+  const matches = getSheetRows_("Matches");
+  const teamsBySlug = indexBy_(getSheetRows_("Teams"), "team_slug");
+  const matchesById = indexBy_(matches, "match_id");
+  const picks = getSheetRows_("Picks")
+    .filter((pick) => {
+      const isPlayerPick = pick.player_id === playerId;
+      const isPhaseMatch = !phaseName || pick.phase === phaseName;
+      return isPlayerPick && isPhaseMatch;
+    })
+    .map((pick) => {
+      const match = matchesById[pick.match_id];
+      return {
+        ...normalizePick_(pick),
+        match: match ? normalizeMatch_(match, teamsBySlug) : null,
+      };
+    });
+
+  return {
+    playerId,
+    phaseName,
+    count: picks.length,
+    picks,
+  };
+}
+
 function testGetPlayerPicks() {
   const players = getSheetRows_("Players");
   const result = getPlayerPicks({
@@ -537,6 +584,46 @@ function testGetPlayerPicks() {
     phase: "Group Matchday 1",
   });
 
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function getSettlementLog(input) {
+  const matchId = input && input.matchId ? String(input.matchId).trim() : "";
+  const playerId = input && input.playerId ? String(input.playerId).trim() : "";
+  const limit = Math.max(1, Math.min(50, Number(input && input.limit) || 20));
+  const playersById = indexBy_(getSheetRows_("Players"), "player_id");
+  const matchesById = indexBy_(getSheetRows_("Matches"), "match_id");
+  const logs = getSheetRows_("SettlementLog")
+    .filter((log) => {
+      const matchesMatch = !matchId || log.match_id === matchId;
+      const matchesPlayer = !playerId || log.player_id === playerId;
+      return matchesMatch && matchesPlayer;
+    })
+    .slice(-limit)
+    .reverse()
+    .map((log) => {
+      const normalized = normalizeSettlementLog_(log);
+      const player = playersById[normalized.playerId];
+      const match = matchesById[normalized.matchId];
+
+      return {
+        ...normalized,
+        playerName: player ? player.display_name : normalized.playerId,
+        matchLabel: match ? `${match.team_a} vs ${match.team_b}` : normalized.matchId,
+      };
+    });
+
+  return {
+    count: logs.length,
+    logs,
+  };
+}
+
+function testGetSettlementLog() {
+  const result = getSettlementLog({
+    limit: 10,
+  });
   console.log(JSON.stringify(result, null, 2));
   return result;
 }
@@ -814,6 +901,13 @@ function doGet(e) {
       }));
     }
 
+    if (action === "getPlayerPickHistory") {
+      return jsonResponse_(getPlayerPickHistory({
+        playerId: e.parameter.playerId,
+        phase: e.parameter.phase,
+      }));
+    }
+
     if (action === "getPlayerProfile") {
       return jsonResponse_(getPlayerProfile({
         playerId: e.parameter.playerId,
@@ -822,6 +916,14 @@ function doGet(e) {
 
     if (action === "getLeaderboard") {
       return jsonResponse_(getLeaderboard());
+    }
+
+    if (action === "getSettlementLog") {
+      return jsonResponse_(getSettlementLog({
+        matchId: e.parameter.matchId,
+        playerId: e.parameter.playerId,
+        limit: e.parameter.limit,
+      }));
     }
 
     if (action === "saveMatchResult") {
