@@ -403,6 +403,14 @@ async function loadSettlementLog() {
   }
 }
 
+function setAdminLoadStatus(message) {
+  const phaseStatus = document.querySelector("#admin-current-phase-status");
+
+  if (phaseStatus) {
+    phaseStatus.textContent = message;
+  }
+}
+
 async function loadAdminSnapshot() {
   try {
     const result = await callAdminApi("getAdminSnapshot");
@@ -414,19 +422,17 @@ async function loadAdminSnapshot() {
 }
 
 function applyAdminSnapshot(result, options = {}) {
-  const status = document.querySelector("#admin-status");
-
   activeGameState = result.gameState;
   adminMatches = result.matches.matches;
   adminPickSummaryByMatch = result.pickSummary?.summaries || {};
   adminDashboard = result.dashboard;
   adminPhases = result.phases?.phases || [];
   adminPlayers = result.players?.players || [];
-  status.textContent = options.cached
+  setAdminLoadStatus(options.cached
     ? `Showing saved admin data - refreshing live data...`
     : result.pickSummary?.error
       ? `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
-      : `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches`;
+      : `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches`);
   renderAdminDashboard();
   renderAdminPhases(adminPhases);
   renderAdminPlayers(adminPlayers);
@@ -435,15 +441,13 @@ function applyAdminSnapshot(result, options = {}) {
 }
 
 async function loadAdminMatches() {
-  const status = document.querySelector("#admin-status");
-
   try {
     const cached = getCachedAdminSnapshot();
 
     if (cached?.result) {
       applyAdminSnapshot(cached.result, { cached: true });
     } else {
-      status.textContent = "Loading matches...";
+      setAdminLoadStatus("Loading matches...");
     }
 
     const snapshot = await loadAdminSnapshot();
@@ -466,9 +470,9 @@ async function loadAdminMatches() {
     adminDashboard = null;
     adminPhases = [];
     adminPlayers = [];
-    status.textContent = summaryResult.error
+    setAdminLoadStatus(summaryResult.error
       ? `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
-      : `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
+      : `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`);
     renderAdminDashboard();
     renderAdminPhases(adminPhases);
     renderAdminPlayers(adminPlayers);
@@ -476,7 +480,7 @@ async function loadAdminMatches() {
     loadSettlementLog();
   } catch (error) {
     console.error(error);
-    status.textContent = `Could not load admin data: ${error.message}`;
+    setAdminLoadStatus(`Could not load admin data: ${error.message}`);
   }
 }
 

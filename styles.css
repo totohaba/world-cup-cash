@@ -582,15 +582,16 @@ h1 {
 
 .admin-control-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
 .admin-control-card {
   display: grid;
-  grid-template-columns: 54px 1fr;
+  grid-template-columns: 54px minmax(0, 1fr);
   gap: 6px 12px;
   align-items: start;
+  min-width: 0;
   min-height: 104px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -611,12 +612,16 @@ h1 {
 }
 
 .admin-control-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--green);
   font-size: 17px;
 }
 
 .admin-control-card span:not(.control-icon) {
   grid-column: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.35;
@@ -824,7 +829,7 @@ h1 {
 
 @media (min-width: 440px) {
   .admin-control-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
