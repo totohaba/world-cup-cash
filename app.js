@@ -2,6 +2,11 @@ const CONFIG = {
   appsScriptUrl: "https://script.google.com/macros/s/AKfycby34tfOsu_gK70hRTxYrKBW_B_aD3uxnPsYg91sd7qt3tJQn5aPvm7U3G2WmY2fb7Twuw/exec",
 };
 
+const STORAGE_KEYS = {
+  deviceId: "worldCupCashDeviceId",
+  player: "worldCupCashPlayer",
+};
+
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
   url.searchParams.set("action", action);
@@ -19,6 +24,45 @@ async function callApi(action, params = {}) {
   }
 
   return response.json();
+}
+
+function getOrCreateDeviceId() {
+  const existingId = localStorage.getItem(STORAGE_KEYS.deviceId);
+
+  if (existingId) {
+    return existingId;
+  }
+
+  const newId = `device_${crypto.randomUUID()}`;
+  localStorage.setItem(STORAGE_KEYS.deviceId, newId);
+  return newId;
+}
+
+function getSavedPlayer() {
+  const saved = localStorage.getItem(STORAGE_KEYS.player);
+  return saved ? JSON.parse(saved) : null;
+}
+
+function savePlayer(player) {
+  localStorage.setItem(STORAGE_KEYS.player, JSON.stringify(player));
+}
+
+function renderPlayer(player) {
+  const joinPanel = document.querySelector("#join-panel");
+  const playerPanel = document.querySelector("#player-panel");
+  const playerName = document.querySelector("#player-name");
+  const balance = document.querySelector("#current-balance");
+
+  if (!player) {
+    joinPanel.hidden = false;
+    playerPanel.hidden = true;
+    return;
+  }
+
+  joinPanel.hidden = true;
+  playerPanel.hidden = false;
+  playerName.textContent = player.display_name;
+  balance.textContent = `$${Number(player.current_balance).toFixed(0)}`;
 }
 
 function renderMatches(matches) {
@@ -53,6 +97,38 @@ function renderMatches(matches) {
     .join("");
 }
 
+async function handleJoinSubmit(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const input = form.querySelector("#display-name");
+  const submitButton = form.querySelector("button");
+  const displayName = input.value.trim();
+
+  if (!displayName) {
+    return;
+  }
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Joining...";
+
+  try {
+    const result = await callApi("joinGame", {
+      deviceId: getOrCreateDeviceId(),
+      displayName,
+    });
+
+    savePlayer(result.player);
+    renderPlayer(result.player);
+  } catch (error) {
+    console.error(error);
+    alert("Could not join the game. Please try again.");
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Join Game";
+  }
+}
+
 async function loadGameState() {
   const status = document.querySelector("#phase-status");
   const phaseName = document.querySelector("#phase-name");
@@ -75,5 +151,7 @@ async function loadGameState() {
 }
 
 document.querySelector("#refresh-button")?.addEventListener("click", loadGameState);
+document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmit);
 
+renderPlayer(getSavedPlayer());
 loadGameState();

@@ -317,6 +317,13 @@ function doGet(e) {
     }));
   }
 
+  if (action === "joinGame") {
+    return jsonResponse_(joinGame({
+      deviceId: e.parameter.deviceId,
+      displayName: e.parameter.displayName,
+    }));
+  }
+
   return jsonResponse_({
     error: "Unknown action",
     action,

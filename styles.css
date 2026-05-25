@@ -91,7 +91,8 @@ h1 {
 }
 
 .phase-card,
-.panel {
+.panel,
+.player-panel {
   margin-top: 18px;
   padding: 18px;
   background: var(--cream);
@@ -109,6 +110,54 @@ h1 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.join-panel form {
+  display: grid;
+  gap: 10px;
+}
+
+.join-panel label {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.join-panel input {
+  width: 100%;
+  border: 1px solid #8aa399;
+  border-radius: 8px;
+  padding: 12px;
+  font: inherit;
+}
+
+.join-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 12px;
+  color: white;
+  background: var(--green);
+  font-weight: 700;
+}
+
+.player-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.player-panel[hidden],
+.join-panel[hidden] {
+  display: none;
+}
+
+.player-panel span {
+  color: var(--muted);
+}
+
+.player-panel strong {
+  color: var(--green);
+  font-size: 20px;
 }
 
 .panel-heading button,

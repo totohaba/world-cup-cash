@@ -24,6 +24,21 @@
         <p id="phase-status">Loading game state...</p>
       </section>
 
+      <section id="join-panel" class="panel join-panel" hidden>
+        <h2>Join Game</h2>
+        <p>Enter your name to join this browser to the family game.</p>
+        <form id="join-form">
+          <label for="display-name">Player name</label>
+          <input id="display-name" name="displayName" type="text" autocomplete="name" required />
+          <button type="submit">Join Game</button>
+        </form>
+      </section>
+
+      <section id="player-panel" class="player-panel" hidden>
+        <span>Signed in as</span>
+        <strong id="player-name"></strong>
+      </section>
+
       <section class="panel">
         <div class="panel-heading">
           <h2>Active Matches</h2>
