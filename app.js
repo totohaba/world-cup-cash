@@ -15,7 +15,6 @@ let activeProfile = null;
 let activePickHistory = [];
 let activeGameState = null;
 let activePickSummaryByMatch = {};
-let activeMatchFilter = "all";
 let activePhases = [];
 
 async function callApi(action, params = {}) {
@@ -238,6 +237,70 @@ function getPayoutText(match, selectedTeam, totalBetAmount) {
   return `Potential Payout ${formatMoney(totalBetAmount * odds, { cents: true })}`;
 }
 
+function getAssetPath(path) {
+  if (!path) {
+    return "";
+  }
+
+  return path;
+}
+
+function getPhaseShortName(phaseName) {
+  const phase = String(phaseName || "");
+
+  if (phase.includes("Matchday 1")) {
+    return "MD1";
+  }
+
+  if (phase.includes("Matchday 2")) {
+    return "MD2";
+  }
+
+  if (phase.includes("Matchday 3")) {
+    return "MD3";
+  }
+
+  if (phase.includes("Round of 32")) {
+    return "R32";
+  }
+
+  if (phase.includes("Round of 16")) {
+    return "R16";
+  }
+
+  if (phase.includes("Quarter")) {
+    return "QF";
+  }
+
+  if (phase.includes("Semi")) {
+    return "SF";
+  }
+
+  if (phase.includes("Third")) {
+    return "3rd";
+  }
+
+  if (phase.includes("Final")) {
+    return "Final";
+  }
+
+  return phase.replace("Group Stage - ", "").replace("Group ", "");
+}
+
+function getActivePhaseLockText() {
+  const activePhase = activePhases.find((phase) => phase.isActive);
+
+  if (!activePhase) {
+    return "";
+  }
+
+  if (activeGameState?.gameStatus === "locked") {
+    return "Phase locked";
+  }
+
+  return activePhase.lockTime ? `Locks: ${activePhase.lockTime}` : "";
+}
+
 function getImpliedProbability(odds) {
   const numberValue = Number(odds);
 
@@ -304,6 +367,18 @@ function enrichPickWithMatch(pick, match) {
   };
 }
 
+function getMatchPickStatus(match, savedPick, readOnly) {
+  if (match.status === "settled" || match.status === "final") {
+    return savedPick ? getPickOutcomeText(savedPick) : "Final";
+  }
+
+  if (readOnly) {
+    return savedPick ? "Locked" : "Locked - not picked";
+  }
+
+  return savedPick ? "Picked" : "Not Picked";
+}
+
 function renderPlayerSnapshotStats() {
   const stats = document.querySelector("#player-snapshot-stats");
 
@@ -349,12 +424,11 @@ function renderPhaseTimeline(phases = activePhases) {
   list.innerHTML = phases
     .map((phase) => {
       const activeClass = phase.isActive ? "active" : "";
-      const lockText = phase.lockTime ? `Locks ${phase.lockTime}` : "";
 
       return `
         <article class="phase-pill ${activeClass}">
-          <strong>${phase.phaseName}</strong>
-          <span>${phase.status}${lockText ? ` - ${lockText}` : ""}</span>
+          <strong>${getPhaseShortName(phase.phaseName)}</strong>
+          <span>${phase.status}</span>
         </article>
       `;
     })
@@ -397,9 +471,12 @@ function renderLeaderboard(players = activeLeaderboard) {
 
   list.innerHTML = players
     .map((player) => {
+      const initials = String(player.displayName || "?").trim().slice(0, 1).toUpperCase();
+
       return `
         <article class="leaderboard-row">
           <div class="rank">${player.rank}</div>
+          <div class="avatar">${initials}</div>
           <div>
             <strong>${player.displayName}</strong>
             <span>${player.wins}W-${player.losses}L-${player.draws}D - ${player.activePickCount} picks</span>
@@ -418,22 +495,37 @@ function renderLeaderboard(players = activeLeaderboard) {
 
 function renderProfile(profile = activeProfile) {
   const summary = document.querySelector("#profile-summary");
+  const identity = document.querySelector("#profile-identity");
 
   if (!summary) {
     return;
   }
 
   if (!profile) {
+    if (identity) {
+      identity.innerHTML = "";
+    }
     summary.innerHTML = `<p class="empty-state">Join the game to see your profile.</p>`;
     return;
+  }
+
+  if (identity) {
+    const initials = String(profile.displayName || "?").trim().slice(0, 1).toUpperCase();
+    identity.innerHTML = `
+      <div class="profile-avatar">${initials}</div>
+      <div>
+        <span>Display Name</span>
+        <strong>${profile.displayName}</strong>
+      </div>
+    `;
   }
 
   const stats = [
     ["Current Balance", formatMoney(profile.currentBalance)],
     ["Available to Bet", formatMoney(profile.availableToBet)],
     ["Pending Bets", formatMoney(profile.pendingBets)],
-    ["Potential Payout", formatMoney(profile.potentialPayout, { cents: true })],
-    ["Active Picks", profile.activePickCount],
+    ["Total Winnings", formatMoney(profile.totalWinnings, { cents: true })],
+    ["Total Losses", formatMoney(profile.totalLosses, { cents: true })],
     ["Record", `${profile.wins}W-${profile.losses}L-${profile.draws}D`],
   ];
 
@@ -523,33 +615,14 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
 
   activeMatches = matches;
 
-  const filteredMatches = matches.filter((match) => {
-    const savedPick = picksByMatch[match.matchId];
-    const matchComplete = match.status === "final" || match.status === "settled";
-
-    if (activeMatchFilter === "unpicked") {
-      return !savedPick && !matchComplete;
-    }
-
-    if (activeMatchFilter === "mine") {
-      return Boolean(savedPick);
-    }
-
-    if (activeMatchFilter === "settled") {
-      return matchComplete;
-    }
-
-    return true;
-  });
-
   renderPlayerSnapshotStats();
 
-  if (!filteredMatches.length) {
-    list.innerHTML = `<p class="empty-state">No matches in this filter.</p>`;
+  if (!matches.length) {
+    list.innerHTML = `<p class="empty-state">No matches found for the active phase.</p>`;
     return;
   }
 
-  list.innerHTML = filteredMatches
+  list.innerHTML = matches
     .map((match) => {
       const matchComplete = match.status === "final" || match.status === "settled";
       const readOnly = matchComplete || gameLocked;
@@ -572,11 +645,19 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
       const activityText = getPickActivityText(match, pickSummary);
       const moneyText = getPickMoneyText(pickSummary);
       const probabilityText = getProbabilityText(match);
+      const pickStatusLabel = getMatchPickStatus(match, savedPick, readOnly);
+      const teamAFlag = getAssetPath(match.teamA?.flagImage);
+      const teamBFlag = getAssetPath(match.teamB?.flagImage);
 
       return `
         <article class="match-card" data-match-id="${match.matchId}">
+          <div class="match-card-topline">
+            <span>${match.phase}</span>
+            <strong class="pick-status-badge ${savedPick ? "picked" : ""}">${pickStatusLabel}</strong>
+          </div>
           <div class="team">
-            <span class="team-code">${match.teamA.teamSlug}</span>
+            ${teamAFlag ? `<img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
+            <span class="team-code">${match.teamASlug}</span>
             <strong>${match.teamA.team}</strong>
             <span>${match.teamADecimalOdds}x</span>
           </div>
@@ -585,7 +666,8 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
             <span>${matchComplete ? finalScore : match.matchDateTime}</span>
           </div>
           <div class="team right">
-            <span class="team-code">${match.teamB.teamSlug}</span>
+            ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
+            <span class="team-code">${match.teamBSlug}</span>
             <strong>${match.teamB.team}</strong>
             <span>${match.teamBDecimalOdds}x</span>
           </div>
@@ -819,7 +901,7 @@ function applyPlayerSnapshot(result, options = {}) {
       ? `${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
       : result.gameState.gameStatus === "locked"
         ? `Phase locked - ${result.matches.count} matches`
-        : `${result.gameState.gameStatus} - ${result.matches.count} matches`;
+        : `${getActivePhaseLockText() || result.gameState.gameStatus} - ${result.matches.count} matches`;
   renderLeaderboard(activeLeaderboard);
   renderProfile(activeProfile);
   renderPickHistory(activePickHistory);
@@ -875,27 +957,13 @@ async function loadGameState() {
         ? `${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
       : gameState.gameStatus === "locked"
         ? `Phase locked - ${matchesResult.count} matches`
-        : `${gameState.gameStatus} - ${matchesResult.count} matches`;
+        : `${getActivePhaseLockText() || gameState.gameStatus} - ${matchesResult.count} matches`;
     renderPhaseTimeline(activePhases);
     renderMatches(matchesResult.matches, activePicksByMatch);
   } catch (error) {
     console.error(error);
     status.textContent = `Could not load live data: ${error.message}`;
   }
-}
-
-function handleMatchFilterClick(event) {
-  const button = event.target.closest("[data-match-filter]");
-
-  if (!button) {
-    return;
-  }
-
-  activeMatchFilter = button.dataset.matchFilter;
-  document.querySelectorAll("[data-match-filter]").forEach((item) => {
-    item.classList.toggle("active", item === button);
-  });
-  renderMatches(activeMatches, activePicksByMatch);
 }
 
 document.querySelector("#refresh-button")?.addEventListener("click", loadGameState);
@@ -906,7 +974,6 @@ document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmi
 document.querySelector("#matches-list")?.addEventListener("click", handlePickClick);
 document.querySelector("#matches-list")?.addEventListener("change", handleBetAmountInput);
 document.querySelector("#matches-list")?.addEventListener("input", handleBetAmountInput);
-document.querySelector(".match-filter-tabs")?.addEventListener("click", handleMatchFilterClick);
 document.querySelector(".bottom-nav")?.addEventListener("click", (event) => {
   const link = event.target.closest("[data-view]");
 
