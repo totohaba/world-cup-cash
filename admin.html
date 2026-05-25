@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash Admin</title>
-    <link rel="stylesheet" href="styles.css?v=fast-load-2" />
+    <link rel="stylesheet" href="styles.css?v=admin-spec-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -16,56 +16,78 @@
         <a class="admin-link" href="index.html">Player App</a>
       </header>
 
-      <section class="phase-card">
-        <h2>Admin Console</h2>
-        <p id="admin-status">Loading matches...</p>
+      <section class="phase-card admin-current-phase">
+        <p class="eyebrow">Current Phase</p>
+        <h2 id="admin-current-phase-name">Loading phase...</h2>
+        <div class="admin-phase-meta">
+          <span id="admin-current-phase-status">Status: loading</span>
+          <span id="admin-current-phase-lock">Locked in: --</span>
+        </div>
         <div id="admin-dashboard-stats" class="mini-stat-row"></div>
+      </section>
+
+      <section class="panel admin-controls-panel">
+        <div class="panel-heading">
+          <h2>Admin Controls</h2>
+          <span class="admin-badge">Admin</span>
+        </div>
+        <div class="admin-control-grid">
+          <button class="admin-control-card" type="button" data-admin-tool="uploadTeams">
+            <span class="control-icon">CSV</span>
+            <strong>Upload Teams CSV</strong>
+            <span>Upload or replace world_cup_cash_all_teams_v1.csv.</span>
+          </button>
+          <button class="admin-control-card" type="button" data-admin-tool="uploadMatches">
+            <span class="control-icon">CSV</span>
+            <strong>Upload Matches CSV</strong>
+            <span>Upload or replace world_cup_cash_all_matches_odds_v1.csv.</span>
+          </button>
+          <button class="admin-control-card" type="button" data-admin-action="openNextPhase">
+            <span class="control-icon">Play</span>
+            <strong>Open Next Phase</strong>
+            <span>Find the next phase and open betting.</span>
+          </button>
+          <button class="admin-control-card" type="button" id="odds-check-button">
+            <span class="control-icon warning">!</span>
+            <strong>Odds Check Status</strong>
+            <span>Check active matches for required odds data.</span>
+          </button>
+          <button class="admin-control-card" type="button" data-admin-action="lockPhase">
+            <span class="control-icon">Lock</span>
+            <strong>Lock Current Phase</strong>
+            <span>No more picks allowed. Existing bets remain.</span>
+          </button>
+          <button class="admin-control-card" type="button" data-settle-final-matches>
+            <span class="control-icon">Cup</span>
+            <strong>Finalize Results</strong>
+            <span>Settle final matches with saved scores.</span>
+          </button>
+          <button class="admin-control-card" type="button" id="download-matches-button">
+            <span class="control-icon">Down</span>
+            <strong>Download Matches CSV</strong>
+            <span>Download the current matches data.</span>
+          </button>
+          <button class="admin-control-card danger" type="button" data-admin-tool="resetGame">
+            <span class="control-icon danger">Reset</span>
+            <strong>Reset Game</strong>
+            <span>Clear test gameplay before the real tournament.</span>
+          </button>
+        </div>
+        <p id="admin-control-status" class="admin-match-status" aria-live="polite"></p>
+        <div id="health-check-results" class="health-check-results"></div>
       </section>
 
       <section class="panel">
         <div class="panel-heading">
-          <h2>Phase Controls</h2>
+          <h2>Phase Timeline</h2>
         </div>
-        <div class="phase-actions">
-          <button type="button" data-admin-action="openPhase">Open Phase</button>
-          <button type="button" data-admin-action="lockPhase">Lock Phase</button>
-          <button type="button" data-admin-action="openNextPhase">Open Next Phase</button>
-          <button type="button" data-settle-final-matches>Settle Final Matches</button>
-        </div>
-        <p id="phase-action-status" class="admin-match-status" aria-live="polite"></p>
         <div id="admin-phase-list" class="phase-list"></div>
       </section>
 
       <section class="panel">
         <div class="panel-heading">
-          <h2>Test Accelerators</h2>
-        </div>
-        <div class="admin-tool-grid">
-          <button id="health-check-button" type="button">Run Health Check</button>
-          <button id="simulate-scores-button" type="button">Simulate Scores</button>
-          <button id="simulate-settle-button" type="button">Simulate and Settle</button>
-        </div>
-        <div id="health-check-results" class="health-check-results"></div>
-        <p id="test-tool-status" class="admin-match-status" aria-live="polite"></p>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Data Exports</h2>
-          <button id="export-all-button" type="button">Download All CSVs</button>
-        </div>
-        <p id="export-status" class="admin-match-status" aria-live="polite"></p>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Match Results</h2>
+          <h2>Manual Results</h2>
           <button id="admin-refresh-button" type="button">Refresh</button>
-        </div>
-        <div class="filter-tabs" aria-label="Match status filters">
-          <button class="active" type="button" data-status-filter="all">All</button>
-          <button type="button" data-status-filter="future">Open</button>
-          <button type="button" data-status-filter="settled">Settled</button>
         </div>
         <div id="admin-matches-list" class="admin-matches-list"></div>
       </section>
@@ -85,6 +107,6 @@
         <div id="admin-player-list" class="player-roster-list"></div>
       </section>
     </main>
-    <script src="admin.js?v=fast-load-2"></script>
+    <script src="admin.js?v=admin-spec-1"></script>
   </body>
 </html>

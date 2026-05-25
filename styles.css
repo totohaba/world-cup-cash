@@ -98,6 +98,32 @@ h1 {
   background: var(--cream);
 }
 
+.admin-current-phase {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-current-phase .eyebrow {
+  margin: 0;
+}
+
+.admin-current-phase h2 {
+  margin: 0;
+}
+
+.admin-phase-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.admin-phase-meta span:first-child {
+  color: var(--green);
+  font-weight: 700;
+}
+
 .mini-stat-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -537,6 +563,101 @@ h1 {
   font-weight: 700;
 }
 
+.admin-controls-panel {
+  background: linear-gradient(180deg, #fffdf7, var(--cream));
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  color: #65450a;
+  background: #f7e8bf;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.admin-control-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.admin-control-card {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 6px 12px;
+  align-items: start;
+  min-height: 104px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.78);
+  text-align: left;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+.admin-control-card:hover,
+.admin-control-card:focus-visible {
+  border-color: var(--gold);
+}
+
+.admin-control-card:disabled {
+  opacity: 0.62;
+}
+
+.admin-control-card strong {
+  color: var(--green);
+  font-size: 17px;
+}
+
+.admin-control-card span:not(.control-icon) {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.admin-control-card.danger strong,
+.admin-control-card.danger span:not(.control-icon) {
+  color: #a3332d;
+}
+
+.control-icon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  color: white;
+  background: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.control-icon.warning {
+  background: var(--gold);
+  color: var(--green-dark);
+  font-size: 24px;
+}
+
+.control-icon.danger {
+  background: #c81f1f;
+  font-size: 10px;
+}
+
+.admin-check-list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .admin-matches-list {
   display: grid;
   gap: 12px;
@@ -697,8 +818,14 @@ h1 {
 
 .admin-match-actions {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+@media (min-width: 440px) {
+  .admin-control-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .admin-match-card button {

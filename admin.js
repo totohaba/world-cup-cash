@@ -7,7 +7,6 @@ const ADMIN_STORAGE_KEYS = {
 };
 
 let adminMatches = [];
-let activeStatusFilter = "all";
 let activeGameState = null;
 let adminPickSummaryByMatch = {};
 let adminDashboard = null;
@@ -100,24 +99,12 @@ function renderAdminMatches(matches) {
     return;
   }
 
-  const filteredMatches = matches.filter((match) => {
-    if (activeStatusFilter === "all") {
-      return true;
-    }
-
-    if (activeStatusFilter === "future") {
-      return match.status !== "settled";
-    }
-
-    return match.status === activeStatusFilter;
-  });
-
-  if (!filteredMatches.length) {
-    list.innerHTML = `<p class="empty-state">No matches in this filter.</p>`;
+  if (!matches.length) {
+    list.innerHTML = `<p class="empty-state">No matches found for the active phase.</p>`;
     return;
   }
 
-  list.innerHTML = filteredMatches
+  list.innerHTML = matches
     .map((match) => {
       const settled = match.status === "settled";
       const teamAGoals = match.teamAGoals ?? "";
@@ -157,7 +144,6 @@ function renderAdminMatches(matches) {
             </label>
           </div>
           <div class="admin-match-actions">
-            <button type="button" data-random-score ${settled ? "disabled" : ""}>Random Score</button>
             <button type="button" data-save-score ${settled ? "disabled" : ""}>Save Score</button>
             <button type="button" data-settle-match ${settled ? "disabled" : ""}>
               ${settled ? "Settled" : "Save and Settle"}
@@ -172,6 +158,9 @@ function renderAdminMatches(matches) {
 
 function renderAdminDashboard() {
   const stats = document.querySelector("#admin-dashboard-stats");
+  const phaseName = document.querySelector("#admin-current-phase-name");
+  const phaseStatus = document.querySelector("#admin-current-phase-status");
+  const phaseLock = document.querySelector("#admin-current-phase-lock");
 
   if (!stats || !activeGameState) {
     return;
@@ -184,6 +173,21 @@ function renderAdminDashboard() {
   const settledCount = adminMatches.filter((match) => match.status === "settled").length;
   const openCount = adminMatches.length - settledCount;
   const playerCount = adminDashboard?.playerCount ?? activeGameState.playerCount ?? 0;
+  const activePhase = adminPhases.find((phase) => phase.isActive);
+
+  if (phaseName) {
+    phaseName.textContent = activeGameState.activePhaseName || "Current phase";
+  }
+
+  if (phaseStatus) {
+    phaseStatus.textContent = `Status: ${activeGameState.gameStatus || "unknown"}`;
+  }
+
+  if (phaseLock) {
+    phaseLock.textContent = activePhase?.lockTime
+      ? `Locks: ${activePhase.lockTime}`
+      : "Locked in: No";
+  }
 
   stats.innerHTML = [
     ["Players", playerCount],
@@ -288,6 +292,47 @@ function renderHealthCheck(result) {
     <p class="admin-match-status">
       ${missingSheets.length ? `Missing sheets: ${missingSheets.map((sheet) => sheet.sheetName).join(", ")}` : "All required sheets found."}
     </p>
+  `;
+}
+
+function getOddsCheckResult() {
+  const missing = adminMatches.filter((match) => {
+    const needsDraw = String(match.phase || activeGameState?.activePhaseName || "").toLowerCase().includes("group");
+    const missingTeamOdds = !Number(match.teamADecimalOdds) || !Number(match.teamBDecimalOdds);
+    const missingDrawOdds = needsDraw && !Number(match.drawDecimalOdds);
+
+    return missingTeamOdds || missingDrawOdds || match.teamASlug === "tbd" || match.teamBSlug === "tbd";
+  });
+
+  return {
+    checkedAt: new Date().toISOString(),
+    ok: missing.length === 0,
+    missing,
+  };
+}
+
+function renderOddsCheck(result) {
+  const list = document.querySelector("#health-check-results");
+
+  if (!list) {
+    return;
+  }
+
+  const missingList = result.missing.slice(0, 6).map((match) => {
+    return `<li>${match.matchId}: ${match.teamA.team} vs ${match.teamB.team}</li>`;
+  }).join("");
+
+  list.innerHTML = `
+    <div class="health-summary ${result.ok ? "ok" : "bad"}">
+      <strong>${result.ok ? "Odds ready" : "Odds need attention"}</strong>
+      <span>${result.checkedAt}</span>
+    </div>
+    <p class="admin-match-status">
+      ${result.ok
+        ? "Every active-phase match has the required odds data."
+        : `${result.missing.length} active-phase match(es) are missing required odds or teams.`}
+    </p>
+    ${missingList ? `<ul class="admin-check-list">${missingList}</ul>` : ""}
   `;
 }
 
@@ -436,88 +481,51 @@ async function loadAdminMatches() {
 }
 
 async function handleExportClick() {
-  const button = document.querySelector("#export-all-button");
-  const status = document.querySelector("#export-status");
-  const originalText = button.textContent;
+  const button = document.querySelector("#download-matches-button");
+  const status = document.querySelector("#admin-control-status");
+  const originalHtml = button.innerHTML;
 
   button.disabled = true;
-  button.textContent = "Exporting...";
+  button.innerHTML = `<strong>Downloading...</strong>`;
   status.textContent = "";
 
   try {
     const result = await callAdminApi("getCsvExport");
+    const matchesFile = result.files.find((file) => file.sheetName === "Matches");
 
-    result.files.forEach((file) => {
-      downloadTextFile(file.fileName, file.csv);
-    });
+    if (!matchesFile) {
+      throw new Error("Matches CSV was not included in the export.");
+    }
 
-    status.textContent = `Downloaded ${result.count} CSV files from ${result.exportedAt}`;
+    downloadTextFile(matchesFile.fileName, matchesFile.csv);
+    status.textContent = `Downloaded ${matchesFile.fileName}`;
   } catch (error) {
     console.error(error);
-    status.textContent = `Could not export CSV files: ${error.message}`;
+    status.textContent = `Could not download matches CSV: ${error.message}`;
   } finally {
     button.disabled = false;
-    button.textContent = originalText;
+    button.innerHTML = originalHtml;
   }
 }
 
 async function handleHealthCheckClick() {
-  const button = document.querySelector("#health-check-button");
-  const status = document.querySelector("#test-tool-status");
-  const originalText = button.textContent;
+  const button = document.querySelector("#odds-check-button");
+  const status = document.querySelector("#admin-control-status");
+  const originalHtml = button.innerHTML;
 
   button.disabled = true;
-  button.textContent = "Checking...";
+  button.innerHTML = `<strong>Checking...</strong>`;
   status.textContent = "";
 
   try {
-    const result = await callAdminApi("getHealthCheck");
-    renderHealthCheck(result);
-    status.textContent = "Health check complete";
+    renderOddsCheck(getOddsCheckResult());
+    status.textContent = "Odds check complete";
   } catch (error) {
     console.error(error);
-    status.textContent = `Health check failed: ${error.message}`;
+    status.textContent = `Odds check failed: ${error.message}`;
   } finally {
     button.disabled = false;
-    button.textContent = originalText;
-  }
-}
-
-async function handleSimulationClick(event) {
-  const button = event.target.closest("#simulate-scores-button, #simulate-settle-button");
-
-  if (!button) {
-    return;
-  }
-
-  const shouldSettle = button.id === "simulate-settle-button";
-  const status = document.querySelector("#test-tool-status");
-  const originalText = button.textContent;
-
-  if (shouldSettle && !confirm("Simulate scores and settle every unsettled active-phase match?")) {
-    return;
-  }
-
-  button.disabled = true;
-  button.textContent = "Working...";
-  status.textContent = "";
-
-  try {
-    const result = await callAdminApi("simulatePhaseResults", {
-      phase: activeGameState?.activePhaseName,
-      settle: shouldSettle ? "true" : "false",
-    });
-
-    status.textContent = shouldSettle
-      ? `Simulated and settled ${result.simulatedCount} of ${result.attemptedCount} matches`
-      : `Simulated scores for ${result.simulatedCount} of ${result.attemptedCount} matches`;
-    await loadAdminMatches();
-  } catch (error) {
-    console.error(error);
-    status.textContent = `Simulation failed: ${error.message}`;
-  } finally {
-    button.disabled = false;
-    button.textContent = originalText;
+    button.innerHTML = originalHtml;
   }
 }
 
@@ -528,12 +536,12 @@ async function handleAdminActionClick(event) {
     return;
   }
 
-  const actionStatus = document.querySelector("#phase-action-status");
+  const actionStatus = document.querySelector("#admin-control-status");
   const action = button.dataset.adminAction;
-  const originalText = button.textContent;
+  const originalHtml = button.innerHTML;
 
   button.disabled = true;
-  button.textContent = "Working...";
+  button.innerHTML = `<strong>Working...</strong>`;
   actionStatus.textContent = "";
 
   try {
@@ -546,7 +554,7 @@ async function handleAdminActionClick(event) {
     actionStatus.textContent = `Could not update phase: ${error.message}`;
   } finally {
     button.disabled = false;
-    button.textContent = originalText;
+    button.innerHTML = originalHtml;
   }
 }
 
@@ -558,16 +566,16 @@ async function handlePhaseManagerClick(event) {
     return;
   }
 
-  const actionStatus = document.querySelector("#phase-action-status");
+  const actionStatus = document.querySelector("#admin-control-status");
   const button = setActiveButton || settleFinalButton;
-  const originalText = button.textContent;
+  const originalHtml = button.innerHTML;
 
   if (settleFinalButton && !confirm("Settle every final match in the active phase?")) {
     return;
   }
 
   button.disabled = true;
-  button.textContent = "Working...";
+  button.innerHTML = `<strong>Working...</strong>`;
   actionStatus.textContent = "";
 
   try {
@@ -591,19 +599,36 @@ async function handlePhaseManagerClick(event) {
     actionStatus.textContent = `Could not complete action: ${error.message}`;
   } finally {
     button.disabled = false;
-    button.textContent = originalText;
+    button.innerHTML = originalHtml;
   }
 }
 
+function handleUnavailableAdminTool(event) {
+  const button = event.target.closest("[data-admin-tool]");
+
+  if (!button) {
+    return;
+  }
+
+  const status = document.querySelector("#admin-control-status");
+  const tool = button.dataset.adminTool;
+  const messages = {
+    uploadTeams: "Upload Teams CSV is in the spec, but this static page still needs the Apps Script upload endpoint.",
+    uploadMatches: "Upload Matches CSV is in the spec, but this static page still needs the Apps Script upload endpoint.",
+    resetGame: "Reset Game is in the spec. I am leaving it inactive until the reset endpoint is built with a strong confirmation step.",
+  };
+
+  status.textContent = messages[tool] || "This admin action is not implemented yet.";
+}
+
 async function handleSettleClick(event) {
-  const button = event.target.closest("[data-settle-match], [data-save-score], [data-random-score]");
+  const button = event.target.closest("[data-settle-match], [data-save-score]");
 
   if (!button) {
     return;
   }
 
   const shouldSettle = button.hasAttribute("data-settle-match");
-  const shouldRandomize = button.hasAttribute("data-random-score");
   const card = button.closest("[data-match-id]");
   const status = card.querySelector(".admin-match-status");
   const matchId = card.dataset.matchId;
@@ -615,18 +640,12 @@ async function handleSettleClick(event) {
   }
 
   button.disabled = true;
-  status.textContent = shouldRandomize
-    ? "Simulating score..."
-    : shouldSettle
+  status.textContent = shouldSettle
       ? "Saving result and settling picks..."
       : "Saving score...";
 
   try {
-    const result = shouldRandomize
-      ? await callAdminApi("simulateMatchResult", {
-          matchId,
-        })
-      : await callAdminApi("saveMatchResult", {
+    const result = await callAdminApi("saveMatchResult", {
           matchId,
           teamAGoals,
           teamBGoals,
@@ -635,45 +654,25 @@ async function handleSettleClick(event) {
 
     status.textContent = shouldSettle
       ? `Settled ${result.settledPickCount} picks`
-      : shouldRandomize
-        ? "Random score saved"
         : "Score saved";
     await loadAdminMatches();
   } catch (error) {
     console.error(error);
-    status.textContent = shouldRandomize
-      ? `Could not simulate score: ${error.message}`
-      : shouldSettle
+    status.textContent = shouldSettle
       ? `Could not settle: ${error.message}`
       : `Could not save score: ${error.message}`;
     button.disabled = false;
   }
 }
 
-function handleFilterClick(event) {
-  const button = event.target.closest("[data-status-filter]");
-
-  if (!button) {
-    return;
-  }
-
-  activeStatusFilter = button.dataset.statusFilter;
-  document.querySelectorAll("[data-status-filter]").forEach((item) => {
-    item.classList.toggle("active", item === button);
-  });
-  renderAdminMatches(adminMatches);
-}
-
 document.querySelector("#admin-refresh-button")?.addEventListener("click", loadAdminMatches);
 document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
-document.querySelector("#export-all-button")?.addEventListener("click", handleExportClick);
-document.querySelector("#health-check-button")?.addEventListener("click", handleHealthCheckClick);
-document.querySelector("#simulate-scores-button")?.addEventListener("click", handleSimulationClick);
-document.querySelector("#simulate-settle-button")?.addEventListener("click", handleSimulationClick);
+document.querySelector("#download-matches-button")?.addEventListener("click", handleExportClick);
+document.querySelector("#odds-check-button")?.addEventListener("click", handleHealthCheckClick);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
-document.querySelector(".filter-tabs")?.addEventListener("click", handleFilterClick);
-document.querySelector(".phase-actions")?.addEventListener("click", handleAdminActionClick);
-document.querySelector(".phase-actions")?.addEventListener("click", handlePhaseManagerClick);
+document.querySelector(".admin-control-grid")?.addEventListener("click", handleAdminActionClick);
+document.querySelector(".admin-control-grid")?.addEventListener("click", handlePhaseManagerClick);
+document.querySelector(".admin-control-grid")?.addEventListener("click", handleUnavailableAdminTool);
 document.querySelector("#admin-phase-list")?.addEventListener("click", handlePhaseManagerClick);
 
 loadAdminMatches();
