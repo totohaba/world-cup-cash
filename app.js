@@ -1,25 +1,25 @@
 const CONFIG = {
-  appsScriptUrl: "",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycby34tfOsu_gK70hRTxYrKBW_B_aD3uxnPsYg91sd7qt3tJQn5aPvm7U3G2WmY2fb7Twuw/exec",
 };
 
-const mockMatches = [
-  {
-    matchId: "WC26-001",
-    matchDateTime: "2026-06-11 12:00 PM PT",
-    teamA: { team: "Mexico", teamSlug: "mexico" },
-    teamB: { team: "South Africa", teamSlug: "south-africa" },
-    teamADecimalOdds: 1.5,
-    teamBDecimalOdds: 7.5,
-  },
-  {
-    matchId: "WC26-002",
-    matchDateTime: "2026-06-11 07:00 PM PT",
-    teamA: { team: "South Korea", teamSlug: "south-korea" },
-    teamB: { team: "Czechia", teamSlug: "czechia" },
-    teamADecimalOdds: 2.75,
-    teamBDecimalOdds: 2.75,
-  },
-];
+async function callApi(action, params = {}) {
+  const url = new URL(CONFIG.appsScriptUrl);
+  url.searchParams.set("action", action);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 function renderMatches(matches) {
   const list = document.querySelector("#matches-list");
@@ -55,14 +55,23 @@ function renderMatches(matches) {
 
 async function loadGameState() {
   const status = document.querySelector("#phase-status");
+  const phaseName = document.querySelector("#phase-name");
 
-  if (!CONFIG.appsScriptUrl) {
-    status.textContent = "Using local mock data until Apps Script is deployed.";
-    renderMatches(mockMatches);
-    return;
+  try {
+    status.textContent = "Loading live game data...";
+
+    const gameState = await callApi("getGameState");
+    const matchesResult = await callApi("getMatches", {
+      phase: gameState.activePhaseName,
+    });
+
+    phaseName.textContent = gameState.activePhaseName;
+    status.textContent = `${gameState.gameStatus} · ${matchesResult.count} matches`;
+    renderMatches(matchesResult.matches);
+  } catch (error) {
+    console.error(error);
+    status.textContent = "Could not load live data. Check the Apps Script deployment.";
   }
-
-  status.textContent = "Connected backend loading will be added next.";
 }
 
 document.querySelector("#refresh-button")?.addEventListener("click", loadGameState);

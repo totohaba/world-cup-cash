@@ -303,3 +303,28 @@ function testGetMatches() {
 
   return result;
 }
+
+function doGet(e) {
+  const action = e.parameter.action;
+
+  if (action === "getGameState") {
+    return jsonResponse_(getGameState());
+  }
+
+  if (action === "getMatches") {
+    return jsonResponse_(getMatches({
+      phase: e.parameter.phase,
+    }));
+  }
+
+  return jsonResponse_({
+    error: "Unknown action",
+    action,
+  });
+}
+
+function jsonResponse_(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
