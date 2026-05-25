@@ -427,6 +427,51 @@ function normalizePick_(pick) {
   };
 }
 
+function toNumber_(value, fallback) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function getActivePicks_() {
+  return getSheetRows_("Picks").filter((pick) => pick.status === "active");
+}
+
+function getPlayerActivity_(playerId, activePicks) {
+  const playerPicks = activePicks.filter((pick) => pick.player_id === playerId);
+  const pendingBets = playerPicks.reduce((total, pick) => {
+    return total + toNumber_(pick.player_cash_stake, 0);
+  }, 0);
+  const potentialPayout = playerPicks.reduce((total, pick) => {
+    return total + toNumber_(pick.potential_payout, 0);
+  }, 0);
+
+  return {
+    activePickCount: playerPicks.length,
+    pendingBets,
+    potentialPayout,
+  };
+}
+
+function normalizePlayer_(player, activePicks) {
+  const currentBalance = toNumber_(player.current_balance, 200);
+  const activity = getPlayerActivity_(player.player_id, activePicks);
+
+  return {
+    playerId: player.player_id,
+    displayName: player.display_name,
+    currentBalance,
+    pendingBets: activity.pendingBets,
+    availableToBet: currentBalance - activity.pendingBets,
+    potentialPayout: activity.potentialPayout,
+    activePickCount: activity.activePickCount,
+    totalWinnings: toNumber_(player.total_winnings, 0),
+    totalLosses: toNumber_(player.total_losses, 0),
+    wins: toNumber_(player.wins, 0),
+    losses: toNumber_(player.losses, 0),
+    draws: toNumber_(player.draws, 0),
+  };
+}
+
 function getPlayerPicks(input) {
   if (!input || !input.playerId) {
     throw new Error("getPlayerPicks requires playerId.");
@@ -458,6 +503,56 @@ function testGetPlayerPicks() {
     phase: "Group Matchday 1",
   });
 
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function getPlayerProfile(input) {
+  if (!input || !input.playerId) {
+    throw new Error("getPlayerProfile requires playerId.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const activePicks = getActivePicks_();
+  const player = getSheetRows_("Players").find((item) => item.player_id === playerId);
+
+  if (!player) {
+    throw new Error("Player not found.");
+  }
+
+  return {
+    player: normalizePlayer_(player, activePicks),
+  };
+}
+
+function getLeaderboard() {
+  const activePicks = getActivePicks_();
+  const players = getSheetRows_("Players")
+    .map((player) => normalizePlayer_(player, activePicks))
+    .sort((a, b) => {
+      if (b.currentBalance !== a.currentBalance) {
+        return b.currentBalance - a.currentBalance;
+      }
+
+      if (b.wins !== a.wins) {
+        return b.wins - a.wins;
+      }
+
+      return a.displayName.localeCompare(b.displayName);
+    })
+    .map((player, index) => ({
+      ...player,
+      rank: index + 1,
+    }));
+
+  return {
+    count: players.length,
+    players,
+  };
+}
+
+function testGetLeaderboard() {
+  const result = getLeaderboard();
   console.log(JSON.stringify(result, null, 2));
   return result;
 }
@@ -497,6 +592,16 @@ function doGet(e) {
         playerId: e.parameter.playerId,
         phase: e.parameter.phase,
       }));
+    }
+
+    if (action === "getPlayerProfile") {
+      return jsonResponse_(getPlayerProfile({
+        playerId: e.parameter.playerId,
+      }));
+    }
+
+    if (action === "getLeaderboard") {
+      return jsonResponse_(getLeaderboard());
     }
 
     return jsonResponse_({

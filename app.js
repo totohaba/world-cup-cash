@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
 
 let activeMatches = [];
 let activePicksByMatch = {};
+let activeLeaderboard = [];
+let activeProfile = null;
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -81,6 +83,18 @@ function savePlayer(player) {
   localStorage.setItem(STORAGE_KEYS.player, JSON.stringify(player));
 }
 
+function formatMoney(value, options = {}) {
+  const numberValue = Number(value) || 0;
+  const maximumFractionDigits = options.cents ? 2 : 0;
+
+  return numberValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: options.cents ? 2 : 0,
+    maximumFractionDigits,
+  });
+}
+
 function renderPlayer(player) {
   const joinPanel = document.querySelector("#join-panel");
   const playerPanel = document.querySelector("#player-panel");
@@ -112,6 +126,96 @@ function getPickStatusText(pick) {
   }
 
   return `Saved: ${pick.selectedTeam} for $${pick.totalBetAmount} total bet`;
+}
+
+function renderLeaderboard(players = activeLeaderboard) {
+  const list = document.querySelector("#leaderboard-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!players.length) {
+    list.innerHTML = `<p class="empty-state">No players yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = players
+    .map((player) => {
+      return `
+        <article class="leaderboard-row">
+          <div class="rank">${player.rank}</div>
+          <div>
+            <strong>${player.displayName}</strong>
+            <span>${player.wins}W-${player.losses}L-${player.draws}D - ${player.activePickCount} picks</span>
+          </div>
+          <div class="leaderboard-money">
+            <strong>${formatMoney(player.currentBalance)}</strong>
+            <span>Potential ${formatMoney(player.potentialPayout, { cents: true })}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderProfile(profile = activeProfile) {
+  const summary = document.querySelector("#profile-summary");
+
+  if (!summary) {
+    return;
+  }
+
+  if (!profile) {
+    summary.innerHTML = `<p class="empty-state">Join the game to see your profile.</p>`;
+    return;
+  }
+
+  const stats = [
+    ["Current Balance", formatMoney(profile.currentBalance)],
+    ["Available to Bet", formatMoney(profile.availableToBet)],
+    ["Pending Bets", formatMoney(profile.pendingBets)],
+    ["Potential Payout", formatMoney(profile.potentialPayout, { cents: true })],
+    ["Active Picks", profile.activePickCount],
+    ["Record", `${profile.wins}W-${profile.losses}L-${profile.draws}D`],
+  ];
+
+  summary.innerHTML = stats
+    .map(([label, value]) => {
+      return `
+        <div class="stat-card">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function showView(viewName) {
+  const views = {
+    matches: document.querySelector("#matches-view"),
+    leaderboard: document.querySelector("#leaderboard-view"),
+    profile: document.querySelector("#profile-view"),
+    rules: document.querySelector("#rules-view"),
+  };
+  const titles = {
+    matches: "Matches",
+    leaderboard: "Leaderboard",
+    profile: "My Profile",
+    rules: "Rules",
+  };
+  const selectedView = views[viewName] ? viewName : "matches";
+
+  Object.entries(views).forEach(([name, view]) => {
+    view.hidden = name !== selectedView;
+  });
+
+  document.querySelectorAll(".bottom-nav a").forEach((link) => {
+    link.classList.toggle("active", link.dataset.view === selectedView);
+  });
+
+  document.querySelector("#screen-title").textContent = titles[selectedView];
 }
 
 function renderMatches(matches, picksByMatch = activePicksByMatch) {
@@ -187,6 +291,7 @@ async function handleJoinSubmit(event) {
     savePlayer(result.player);
     renderPlayer(result.player);
     renderMatches(activeMatches);
+    loadSummaryData();
   } catch (error) {
     console.error(error);
     alert("Could not join the game. Please try again.");
@@ -239,6 +344,7 @@ async function handlePickClick(event) {
       totalBetAmount: Number(result.pick.total_bet_amount) || 1,
     };
     status.textContent = `Saved: ${result.pick.selected_team} for $1 house bet`;
+    loadSummaryData();
   } catch (error) {
     console.error(error);
     status.textContent = `Could not save pick: ${error.message}`;
@@ -246,6 +352,35 @@ async function handlePickClick(event) {
     buttons.forEach((item) => {
       item.disabled = false;
     });
+  }
+}
+
+async function loadSummaryData() {
+  const player = getSavedPlayer();
+
+  try {
+    const leaderboardResult = await callApi("getLeaderboard");
+    activeLeaderboard = leaderboardResult.players;
+    renderLeaderboard(activeLeaderboard);
+  } catch (error) {
+    console.error(error);
+  }
+
+  if (!player) {
+    activeProfile = null;
+    renderProfile(activeProfile);
+    return;
+  }
+
+  try {
+    const profileResult = await callApi("getPlayerProfile", {
+      playerId: player.player_id,
+    });
+    activeProfile = profileResult.player;
+    renderProfile(activeProfile);
+    document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
+  } catch (error) {
+    console.error(error);
   }
 }
 
@@ -264,6 +399,7 @@ async function loadGameState() {
     const picksResult = await loadPlayerPicks(player, gameState.activePhaseName);
 
     activePicksByMatch = indexPicksByMatch(picksResult.picks);
+    await loadSummaryData();
 
     phaseName.textContent = gameState.activePhaseName;
     status.textContent = picksResult.error
@@ -277,8 +413,22 @@ async function loadGameState() {
 }
 
 document.querySelector("#refresh-button")?.addEventListener("click", loadGameState);
+document.querySelectorAll(".refresh-data-button").forEach((button) => {
+  button.addEventListener("click", loadSummaryData);
+});
 document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmit);
 document.querySelector("#matches-list")?.addEventListener("click", handlePickClick);
+document.querySelector(".bottom-nav")?.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-view]");
+
+  if (!link) {
+    return;
+  }
+
+  event.preventDefault();
+  showView(link.dataset.view);
+});
 
 renderPlayer(getSavedPlayer());
+showView(location.hash.replace("#", "") || "matches");
 loadGameState();

@@ -177,6 +177,84 @@ h1 {
   gap: 12px;
 }
 
+.leaderboard-list {
+  display: grid;
+  gap: 10px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.leaderboard-row span,
+.stat-card span,
+.empty-state {
+  color: var(--muted);
+}
+
+.leaderboard-row span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.rank {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: var(--green-dark);
+  background: var(--gold);
+  font-weight: 700;
+}
+
+.leaderboard-money {
+  text-align: right;
+}
+
+.leaderboard-money strong {
+  display: block;
+  color: var(--green);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat-card {
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.stat-card span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.stat-card strong {
+  color: var(--green);
+  font-size: 22px;
+}
+
+.rules-panel p {
+  color: var(--text);
+  line-height: 1.45;
+}
+
 .match-card {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

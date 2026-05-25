@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash</title>
-    <link rel="stylesheet" href="styles.css?v=load-picks-3" />
+    <link rel="stylesheet" href="styles.css?v=game-tabs-1" />
   </head>
   <body>
     <main class="app-shell">
       <header class="app-header">
         <div>
           <p class="eyebrow">World Cup Cash</p>
-          <h1>Matches</h1>
+          <h1 id="screen-title">Matches</h1>
         </div>
         <div class="balance-card">
           <span>Current Balance</span>
@@ -39,22 +39,45 @@
         <strong id="player-name"></strong>
       </section>
 
-      <section class="panel">
+      <section id="matches-view" class="app-view">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Active Matches</h2>
+            <button id="refresh-button" type="button">Refresh</button>
+          </div>
+          <div id="matches-list" class="matches-list"></div>
+        </section>
+      </section>
+
+      <section id="leaderboard-view" class="app-view panel" hidden>
         <div class="panel-heading">
-          <h2>Active Matches</h2>
-          <button id="refresh-button" type="button">Refresh</button>
+          <h2>Leaderboard</h2>
+          <button class="refresh-data-button" type="button">Refresh</button>
         </div>
-        <div id="matches-list" class="matches-list"></div>
+        <div id="leaderboard-list" class="leaderboard-list"></div>
+      </section>
+
+      <section id="profile-view" class="app-view panel" hidden>
+        <h2>My Profile</h2>
+        <div id="profile-summary" class="stat-grid"></div>
+      </section>
+
+      <section id="rules-view" class="app-view panel rules-panel" hidden>
+        <h2>Rules</h2>
+        <p>Win the most imaginary money by correctly picking World Cup match winners.</p>
+        <p>Every pick includes a free $1 house bet. You never lose that free dollar.</p>
+        <p>You may add your own fake cash later, but for this prototype every pick starts as a $1 house bet.</p>
+        <p>Highest Current Balance wins. If tied, most correct picks wins.</p>
       </section>
 
       <nav class="bottom-nav" aria-label="Main navigation">
-        <a class="active" href="index.html">Matches</a>
-        <a href="#leaderboard">Leaderboard</a>
-        <a href="#profile">My Profile</a>
-        <a href="#rules">Rules</a>
+        <a class="active" href="#matches" data-view="matches">Matches</a>
+        <a href="#leaderboard" data-view="leaderboard">Leaderboard</a>
+        <a href="#profile" data-view="profile">My Profile</a>
+        <a href="#rules" data-view="rules">Rules</a>
       </nav>
     </main>
 
-    <script src="app.js?v=load-picks-3"></script>
+    <script src="app.js?v=game-tabs-1"></script>
   </body>
 </html>
