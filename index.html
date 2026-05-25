@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>World Cup Cash</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">World Cup Cash</p>
+          <h1>Matches</h1>
+        </div>
+        <div class="balance-card">
+          <span>Current Balance</span>
+          <strong id="current-balance">$200</strong>
+        </div>
+      </header>
+
+      <section class="phase-card">
+        <h2 id="phase-name">Group Matchday 1</h2>
+        <p id="phase-status">Loading game state...</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Active Matches</h2>
+          <button id="refresh-button" type="button">Refresh</button>
+        </div>
+        <div id="matches-list" class="matches-list"></div>
+      </section>
+
+      <nav class="bottom-nav" aria-label="Main navigation">
+        <a class="active" href="index.html">Matches</a>
+        <a href="#leaderboard">Leaderboard</a>
+        <a href="#profile">My Profile</a>
+        <a href="#rules">Rules</a>
+      </nav>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
