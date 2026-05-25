@@ -4,25 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash</title>
-    <link rel="stylesheet" href="styles.css?v=player-spec-1" />
+    <link rel="stylesheet" href="styles.css?v=match-detail-1" />
   </head>
   <body>
     <main class="app-shell">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">World Cup Cash</p>
-          <h1 id="screen-title">Matches</h1>
-        </div>
+      <header class="app-header player-design-header">
+        <img class="app-logo" src="assets/world-cup-cash-logo.png" alt="World Cup Cash" />
         <div class="balance-card">
           <span>Current Balance</span>
           <strong id="current-balance">$200</strong>
+          <span class="balance-divider"></span>
+          <span>Available to Bet</span>
+          <strong id="available-balance">$200</strong>
         </div>
       </header>
 
-      <section class="phase-card">
+      <section class="phase-card phase-progress-card">
         <h2 id="phase-name">Group Matchday 1</h2>
         <p id="phase-status">Loading game state...</p>
-        <div id="player-snapshot-stats" class="mini-stat-row"></div>
+        <div id="phase-timeline" class="phase-timeline"></div>
       </section>
 
       <section id="join-panel" class="panel join-panel" hidden>
@@ -41,14 +41,26 @@
       </section>
 
       <section id="matches-view" class="app-view">
-        <section class="panel">
+        <section class="panel matches-panel">
           <div class="panel-heading">
-            <h2>Active Matches</h2>
+            <h2>Matches</h2>
             <button id="refresh-button" type="button">Refresh</button>
           </div>
-          <div id="phase-timeline" class="phase-timeline"></div>
           <div id="matches-list" class="matches-list"></div>
         </section>
+      </section>
+
+      <section id="match-detail-view" class="app-view match-detail-view" hidden>
+        <div class="detail-header">
+          <img class="detail-logo" src="assets/world-cup-cash-logo.png" alt="World Cup Cash" />
+          <button id="detail-close-button" class="icon-close-button" type="button" aria-label="Close match details">X</button>
+        </div>
+        <h2>Match Details</h2>
+        <div class="detail-swipe-row">
+          <button type="button" data-detail-prev>‹ Previous</button>
+          <button type="button" data-detail-next>Next ›</button>
+        </div>
+        <div id="match-detail-content"></div>
       </section>
 
       <section id="leaderboard-view" class="app-view panel" hidden>
@@ -120,6 +132,6 @@
       </nav>
     </main>
 
-    <script src="app.js?v=player-spec-1"></script>
+    <script src="app.js?v=match-detail-1"></script>
   </body>
 </html>

@@ -16,6 +16,9 @@ let activePickHistory = [];
 let activeGameState = null;
 let activePickSummaryByMatch = {};
 let activePhases = [];
+let activeDetailMatchId = "";
+let activeDetailSelection = "";
+let activeDetailBetAmount = 1;
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -158,10 +161,13 @@ function renderPlayer(player) {
   const playerPanel = document.querySelector("#player-panel");
   const playerName = document.querySelector("#player-name");
   const balance = document.querySelector("#current-balance");
+  const availableBalance = document.querySelector("#available-balance");
 
   if (!player) {
     joinPanel.hidden = false;
     playerPanel.hidden = true;
+    balance.textContent = "$200";
+    availableBalance.textContent = "$200";
     return;
   }
 
@@ -169,6 +175,9 @@ function renderPlayer(player) {
   playerPanel.hidden = false;
   playerName.textContent = player.display_name;
   balance.textContent = `$${Number(player.current_balance).toFixed(0)}`;
+  availableBalance.textContent = activeProfile
+    ? formatMoney(activeProfile.availableToBet)
+    : `$${Number(player.current_balance).toFixed(0)}`;
 }
 
 function indexPicksByMatch(picks) {
@@ -243,6 +252,34 @@ function getAssetPath(path) {
   }
 
   return path;
+}
+
+function getTeam(match, side) {
+  return side === "A" ? match.teamA : match.teamB;
+}
+
+function getTeamSlug(match, side) {
+  return side === "A" ? match.teamASlug : match.teamBSlug;
+}
+
+function getTeamOdds(match, side) {
+  return side === "A" ? match.teamADecimalOdds : match.teamBDecimalOdds;
+}
+
+function getTeamFlag(match, side) {
+  return getAssetPath(getTeam(match, side)?.flagImage);
+}
+
+function getTeamEmblem(match, side) {
+  return getAssetPath(getTeam(match, side)?.emblemImage);
+}
+
+function getTeamPlayerImage(match, side) {
+  return getAssetPath(getTeam(match, side)?.starPlayerImage);
+}
+
+function formatMatchDateTime(value) {
+  return String(value || "").replace("2026-", "").replace(":00 ", " ");
 }
 
 function getPhaseShortName(phaseName) {
@@ -424,11 +461,12 @@ function renderPhaseTimeline(phases = activePhases) {
   list.innerHTML = phases
     .map((phase) => {
       const activeClass = phase.isActive ? "active" : "";
+      const completeClass = phase.status === "settled" || phase.status === "complete" ? "complete" : "";
 
       return `
-        <article class="phase-pill ${activeClass}">
+        <article class="phase-pill ${activeClass} ${completeClass}">
+          <span class="phase-dot"></span>
           <strong>${getPhaseShortName(phase.phaseName)}</strong>
-          <span>${phase.status}</span>
         </article>
       `;
     })
@@ -581,17 +619,21 @@ function renderPickHistory(picks = activePickHistory) {
 function showView(viewName) {
   const views = {
     matches: document.querySelector("#matches-view"),
+    detail: document.querySelector("#match-detail-view"),
     leaderboard: document.querySelector("#leaderboard-view"),
     profile: document.querySelector("#profile-view"),
     rules: document.querySelector("#rules-view"),
   };
   const titles = {
     matches: "Matches",
+    detail: "Match Details",
     leaderboard: "Leaderboard",
     profile: "My Profile",
     rules: "Rules",
   };
-  const selectedView = views[viewName] ? viewName : "matches";
+  const selectedView = viewName === "detail" && !activeDetailMatchId
+    ? "matches"
+    : views[viewName] ? viewName : "matches";
 
   Object.entries(views).forEach(([name, view]) => {
     view.hidden = name !== selectedView;
@@ -600,13 +642,13 @@ function showView(viewName) {
   document.querySelectorAll(".bottom-nav a").forEach((link) => {
     link.classList.toggle("active", link.dataset.view === selectedView);
   });
-
-  document.querySelector("#screen-title").textContent = titles[selectedView];
+  document.querySelector(".bottom-nav").hidden = selectedView === "detail";
+  document.querySelector(".player-design-header").hidden = selectedView === "detail";
+  document.querySelector(".phase-progress-card").hidden = selectedView === "detail";
 }
 
 function renderMatches(matches, picksByMatch = activePicksByMatch) {
   const list = document.querySelector("#matches-list");
-  const player = getSavedPlayer();
   const gameLocked = activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
 
   if (!list) {
@@ -623,87 +665,189 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
   }
 
   list.innerHTML = matches
-    .map((match) => {
+    .map((match, index) => {
       const matchComplete = match.status === "final" || match.status === "settled";
       const readOnly = matchComplete || gameLocked;
-      const pickDisabled = player && !readOnly ? "" : "disabled";
       const savedPick = enrichPickWithMatch(picksByMatch[match.matchId], match);
-      const teamASelected = savedPick?.selectedTeam === match.teamASlug ? "selected" : "";
-      const teamBSelected = savedPick?.selectedTeam === match.teamBSlug ? "selected" : "";
       const finalScore = `${match.teamAGoals} - ${match.teamBGoals}`;
-      const statusText = matchComplete
-        ? `Final: ${match.teamA.team} ${finalScore} ${match.teamB.team}${savedPick ? ` - ${getPickOutcomeText(savedPick)}` : ""}`
-        : getPickStatusText(savedPick);
-      const maxTotalBet = getMaxTotalBet(savedPick);
-      const totalBetAmount = Math.min(
-        maxTotalBet,
-        Math.max(1, Number(savedPick?.totalBetAmount) || 1)
-      );
-      const selectedTeam = savedPick?.selectedTeam || "";
-      const payoutText = getPayoutText(match, selectedTeam, totalBetAmount);
-      const pickSummary = activePickSummaryByMatch[match.matchId];
-      const activityText = getPickActivityText(match, pickSummary);
-      const moneyText = getPickMoneyText(pickSummary);
-      const probabilityText = getProbabilityText(match);
       const pickStatusLabel = getMatchPickStatus(match, savedPick, readOnly);
-      const teamAFlag = getAssetPath(match.teamA?.flagImage);
-      const teamBFlag = getAssetPath(match.teamB?.flagImage);
+      const teamAFlag = getTeamFlag(match, "A");
+      const teamBFlag = getTeamFlag(match, "B");
+      const actionText = savedPick ? "Update Bet" : "Make Bet";
+
+      if (index === 0) {
+        const teamAPlayer = getTeamPlayerImage(match, "A");
+        const teamBPlayer = getTeamPlayerImage(match, "B");
+
+        return `
+          <article class="featured-match-card" data-open-match="${match.matchId}">
+            <div class="featured-label">★ Featured Match</div>
+            <div class="featured-team featured-left">
+              ${teamAPlayer ? `<img class="featured-player" src="${teamAPlayer}" alt="" loading="lazy" />` : ""}
+              ${teamAFlag ? `<img class="featured-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
+              <strong>${match.teamA.team}</strong>
+            </div>
+            <div class="featured-center">
+              <span>${match.phase}</span>
+              <strong>VS</strong>
+              <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
+              <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
+            </div>
+            <div class="featured-team featured-right">
+              ${teamBPlayer ? `<img class="featured-player" src="${teamBPlayer}" alt="" loading="lazy" />` : ""}
+              ${teamBFlag ? `<img class="featured-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
+              <strong>${match.teamB.team}</strong>
+            </div>
+            <p class="match-list-status">${pickStatusLabel}</p>
+          </article>
+        `;
+      }
 
       return `
-        <article class="match-card" data-match-id="${match.matchId}">
-          <div class="match-card-topline">
-            <span>${match.phase}</span>
-            <strong class="pick-status-badge ${savedPick ? "picked" : ""}">${pickStatusLabel}</strong>
-          </div>
-          <div class="team">
+        <article class="match-row-card" data-open-match="${match.matchId}">
+          <div class="match-row-team">
             ${teamAFlag ? `<img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
-            <span class="team-code">${match.teamASlug}</span>
             <strong>${match.teamA.team}</strong>
-            <span>${match.teamADecimalOdds}x</span>
           </div>
-          <div class="match-center">
+          <div class="match-row-center">
+            <span>${match.phase}</span>
             <strong>VS</strong>
-            <span>${matchComplete ? finalScore : match.matchDateTime}</span>
+            <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
           </div>
-          <div class="team right">
+          <div class="match-row-team right">
             ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
-            <span class="team-code">${match.teamBSlug}</span>
             <strong>${match.teamB.team}</strong>
-            <span>${match.teamBDecimalOdds}x</span>
           </div>
-          <div class="pick-actions" role="group" aria-label="Pick winner">
-            <button class="${teamASelected}" type="button" data-selected-team="${match.teamASlug}" ${pickDisabled}>
-              Pick ${match.teamA.team}
-            </button>
-            <button class="${teamBSelected}" type="button" data-selected-team="${match.teamBSlug}" ${pickDisabled}>
-              Pick ${match.teamB.team}
-            </button>
-          </div>
-          <div class="pick-activity">
-            <strong>${activityText}</strong>
-            ${moneyText ? `<span>${moneyText}</span>` : ""}
-            <span>${probabilityText}</span>
-          </div>
-          <div class="bet-control">
-            <label for="bet-${match.matchId}">Total Bet</label>
-            <input
-              id="bet-${match.matchId}"
-              type="number"
-              min="1"
-              max="${maxTotalBet}"
-              step="1"
-              value="${totalBetAmount}"
-              data-bet-amount
-              ${readOnly ? "disabled" : ""}
-            />
-            <span>Max ${formatMoney(maxTotalBet)}</span>
-          </div>
-          <p class="payout-preview" data-payout-preview>${payoutText}</p>
-          <p class="pick-status" aria-live="polite">${statusText}</p>
+          <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
+          <p class="match-list-status">${pickStatusLabel}</p>
         </article>
       `;
     })
     .join("");
+}
+
+function getDetailMatch() {
+  return activeMatches.find((match) => match.matchId === activeDetailMatchId) || activeMatches[0];
+}
+
+function renderDetailTeam(match, side) {
+  const team = getTeam(match, side);
+  const slug = getTeamSlug(match, side);
+  const selectedClass = activeDetailSelection === slug ? "selected" : "";
+  const flag = getTeamFlag(match, side);
+  const emblem = getTeamEmblem(match, side);
+  const playerImage = getTeamPlayerImage(match, side);
+  const odds = getTeamOdds(match, side);
+  const probability = getImpliedProbability(odds).toFixed(0);
+
+  return `
+    <div class="detail-team detail-team-${side.toLowerCase()}">
+      ${playerImage ? `<img class="detail-player" src="${playerImage}" alt="" loading="lazy" />` : ""}
+      <div class="detail-team-identity">
+        ${flag ? `<img class="detail-flag" src="${flag}" alt="" loading="lazy" />` : ""}
+        ${emblem ? `<img class="detail-emblem" src="${emblem}" alt="" loading="lazy" />` : ""}
+      </div>
+      <h3>${team.team}</h3>
+      <button class="${selectedClass}" type="button" data-detail-team="${slug}">Pick ${team.team}</button>
+      <dl>
+        <div><dt>FIFA Rank</dt><dd>${team.fifaRank || "--"}</dd></div>
+        <div><dt>Betting Odds</dt><dd>${odds || "--"}x</dd></div>
+        <div><dt>Win Probability</dt><dd>${probability}%</dd></div>
+        <div><dt>Nickname</dt><dd>${team.nickname || "--"}</dd></div>
+        <div><dt>Star Player</dt><dd>${team.starPlayer || "--"}</dd></div>
+        <div><dt>Position</dt><dd>${team.starPlayerPosition || "--"}</dd></div>
+      </dl>
+    </div>
+  `;
+}
+
+function renderMatchDetail() {
+  const container = document.querySelector("#match-detail-content");
+  const match = getDetailMatch();
+
+  if (!container || !match) {
+    return;
+  }
+
+  activeDetailMatchId = match.matchId;
+  const savedPick = enrichPickWithMatch(activePicksByMatch[match.matchId], match);
+  const matchComplete = match.status === "final" || match.status === "settled";
+  const readOnly = matchComplete || activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
+
+  if (!activeDetailSelection) {
+    activeDetailSelection = savedPick?.selectedTeam || match.teamASlug;
+  }
+
+  const maxTotalBet = getMaxTotalBet(savedPick);
+  activeDetailBetAmount = Math.min(maxTotalBet, Math.max(1, Number(activeDetailBetAmount || savedPick?.totalBetAmount) || 1));
+  const payoutText = getPayoutText(match, activeDetailSelection, activeDetailBetAmount);
+  const selectedTeamName = getTeamNameForSlug(match, activeDetailSelection);
+
+  container.innerHTML = `
+    <article class="detail-match-hero">
+      <div class="detail-match-meta">
+        <span>${match.phase}</span>
+        <strong>VS</strong>
+        <span>${formatMatchDateTime(match.matchDateTime)}</span>
+      </div>
+      <div class="detail-teams-grid">
+        ${renderDetailTeam(match, "A")}
+        ${renderDetailTeam(match, "B")}
+      </div>
+    </article>
+    <section class="detail-bet-panel">
+      <h3>$1 House Money Included</h3>
+      <div class="detail-bet-grid">
+        <label>
+          Your Bet
+          <input type="number" min="1" max="${maxTotalBet}" step="1" value="${activeDetailBetAmount}" data-detail-bet ${readOnly ? "disabled" : ""} />
+          <span>Max ${formatMoney(maxTotalBet)}</span>
+        </label>
+        <div class="detail-payout">
+          <span>Potential Payout</span>
+          <strong>${payoutText.replace("Potential Payout ", "")}</strong>
+        </div>
+      </div>
+      <p class="detail-selected-copy">Selected: ${selectedTeamName}</p>
+      <button class="place-bet-button" type="button" data-place-bet ${readOnly ? "disabled" : ""}>
+        ${savedPick ? "Update Bet" : "Place Bet"}
+      </button>
+      <p class="pick-status" data-detail-status aria-live="polite">${savedPick ? getPickStatusText(savedPick) : ""}</p>
+    </section>
+  `;
+}
+
+function openMatchDetail(matchId) {
+  const match = activeMatches.find((item) => item.matchId === matchId);
+
+  if (!match) {
+    return;
+  }
+
+  const savedPick = activePicksByMatch[match.matchId];
+  activeDetailMatchId = match.matchId;
+  activeDetailSelection = savedPick?.selectedTeam || match.teamASlug;
+  activeDetailBetAmount = Number(savedPick?.totalBetAmount) || 1;
+  document.querySelector("#match-detail-view").hidden = false;
+  showView("detail");
+  renderMatchDetail();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function closeMatchDetail() {
+  activeDetailMatchId = "";
+  activeDetailSelection = "";
+  document.querySelector("#match-detail-view").hidden = true;
+  showView("matches");
+}
+
+function moveDetail(delta) {
+  const index = activeMatches.findIndex((match) => match.matchId === activeDetailMatchId);
+  const next = activeMatches[index + delta];
+
+  if (next) {
+    openMatchDetail(next.matchId);
+  }
 }
 
 async function handleJoinSubmit(event) {
@@ -740,93 +884,98 @@ async function handleJoinSubmit(event) {
   }
 }
 
-async function handlePickClick(event) {
-  const button = event.target.closest("[data-selected-team]");
-
-  if (!button) {
-    return;
-  }
-
+async function handleDetailPlaceBet() {
   const player = getSavedPlayer();
+  const match = getDetailMatch();
+  const status = document.querySelector("[data-detail-status]");
+  const button = document.querySelector("[data-place-bet]");
 
   if (!player) {
     alert("Join the game before making a pick.");
     return;
   }
 
-  const card = button.closest("[data-match-id]");
-  const status = card.querySelector(".pick-status");
-  const matchId = card.dataset.matchId;
-  const selectedTeam = button.dataset.selectedTeam;
-  const betInput = card.querySelector("[data-bet-amount]");
-  const buttons = card.querySelectorAll("[data-selected-team]");
-  const totalBetAmount = Math.max(1, Math.floor(Number(betInput.value) || 1));
+  if (!match || !activeDetailSelection) {
+    return;
+  }
 
-  buttons.forEach((item) => {
-    item.disabled = true;
-  });
+  button.disabled = true;
   status.textContent = "Saving pick...";
 
   try {
     const result = await callApi("savePick", {
       playerId: player.player_id,
-      matchId,
-      selectedTeam,
-      totalBetAmount,
+      matchId: match.matchId,
+      selectedTeam: activeDetailSelection,
+      totalBetAmount: activeDetailBetAmount,
     });
 
-    buttons.forEach((item) => {
-      item.classList.toggle("selected", item.dataset.selectedTeam === result.pick.selected_team);
-    });
-
-    activePicksByMatch[matchId] = {
+    activePicksByMatch[match.matchId] = {
       matchId: result.pick.match_id,
       selectedTeam: result.pick.selected_team,
-      selectedTeamName: getTeamNameForSlug(
-        activeMatches.find((match) => match.matchId === matchId),
-        result.pick.selected_team
-      ),
+      selectedTeamName: getTeamNameForSlug(match, result.pick.selected_team),
       totalBetAmount: Number(result.pick.total_bet_amount) || 1,
       playerCashStake: Number(result.pick.player_cash_stake) || 0,
     };
-    status.textContent = `Saved: ${activePicksByMatch[matchId].selectedTeamName} for ${formatMoney(result.pick.total_bet_amount)} total bet`;
+    status.textContent = `Saved: ${activePicksByMatch[match.matchId].selectedTeamName} for ${formatMoney(result.pick.total_bet_amount)} total bet`;
+    renderMatches(activeMatches, activePicksByMatch);
+    renderMatchDetail();
     loadSummaryData();
   } catch (error) {
     console.error(error);
     status.textContent = `Could not save pick: ${error.message}`;
-  } finally {
-    buttons.forEach((item) => {
-      item.disabled = false;
-    });
+    button.disabled = false;
   }
 }
 
-function handleBetAmountInput(event) {
-  const input = event.target.closest("[data-bet-amount]");
+function handleMatchesListClick(event) {
+  const target = event.target.closest("[data-open-match], [data-open-match-button]");
+
+  if (!target) {
+    return;
+  }
+
+  const matchId = target.dataset.openMatch || target.dataset.openMatchButton;
+  openMatchDetail(matchId);
+}
+
+function handleMatchDetailClick(event) {
+  const teamButton = event.target.closest("[data-detail-team]");
+  const placeBetButton = event.target.closest("[data-place-bet]");
+  const prevButton = event.target.closest("[data-detail-prev]");
+  const nextButton = event.target.closest("[data-detail-next]");
+
+  if (teamButton) {
+    activeDetailSelection = teamButton.dataset.detailTeam;
+    renderMatchDetail();
+    return;
+  }
+
+  if (placeBetButton) {
+    handleDetailPlaceBet();
+    return;
+  }
+
+  if (prevButton) {
+    moveDetail(-1);
+    return;
+  }
+
+  if (nextButton) {
+    moveDetail(1);
+  }
+}
+
+function handleDetailBetInput(event) {
+  const input = event.target.closest("[data-detail-bet]");
 
   if (!input) {
     return;
   }
 
-  const card = input.closest("[data-match-id]");
-  const match = activeMatches.find((item) => item.matchId === card.dataset.matchId);
-  const savedPick = activePicksByMatch[card.dataset.matchId];
-  const selectedButton = card.querySelector("[data-selected-team].selected");
-  const selectedTeam = selectedButton?.dataset.selectedTeam || savedPick?.selectedTeam || "";
   const max = Number(input.max) || 1;
-  const totalBetAmount = Math.min(max, Math.max(1, Math.floor(Number(input.value) || 1)));
-  const preview = card.querySelector("[data-payout-preview]");
-  const status = card.querySelector(".pick-status");
-
-  input.value = totalBetAmount;
-
-  if (match && preview) {
-    preview.textContent = getPayoutText(match, selectedTeam, totalBetAmount);
-  }
-
-  if (savedPick && Number(savedPick.totalBetAmount) !== totalBetAmount) {
-    status.textContent = "Tap your selected team to save the new total bet";
-  }
+  activeDetailBetAmount = Math.min(max, Math.max(1, Math.floor(Number(input.value) || 1)));
+  renderMatchDetail();
 }
 
 async function loadSummaryData() {
@@ -857,6 +1006,7 @@ async function loadSummaryData() {
     renderProfile(activeProfile);
     renderPickHistory(activePickHistory);
     document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
+    document.querySelector("#available-balance").textContent = formatMoney(activeProfile.availableToBet);
     activePicksByMatch = {
       ...activePicksByMatch,
       ...indexPicksByMatch(activePickHistory),
@@ -911,6 +1061,7 @@ function applyPlayerSnapshot(result, options = {}) {
 
   if (activeProfile) {
     document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
+    document.querySelector("#available-balance").textContent = formatMoney(activeProfile.availableToBet);
   }
 }
 
@@ -971,9 +1122,11 @@ document.querySelectorAll(".refresh-data-button").forEach((button) => {
   button.addEventListener("click", loadSummaryData);
 });
 document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmit);
-document.querySelector("#matches-list")?.addEventListener("click", handlePickClick);
-document.querySelector("#matches-list")?.addEventListener("change", handleBetAmountInput);
-document.querySelector("#matches-list")?.addEventListener("input", handleBetAmountInput);
+document.querySelector("#matches-list")?.addEventListener("click", handleMatchesListClick);
+document.querySelector("#match-detail-view")?.addEventListener("click", handleMatchDetailClick);
+document.querySelector("#match-detail-view")?.addEventListener("change", handleDetailBetInput);
+document.querySelector("#match-detail-view")?.addEventListener("input", handleDetailBetInput);
+document.querySelector("#detail-close-button")?.addEventListener("click", closeMatchDetail);
 document.querySelector(".bottom-nav")?.addEventListener("click", (event) => {
   const link = event.target.closest("[data-view]");
 
