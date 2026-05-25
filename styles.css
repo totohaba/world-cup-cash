@@ -271,6 +271,44 @@ h1 {
   gap: 10px;
 }
 
+.bet-control {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 92px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf5;
+}
+
+.bet-control label {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.bet-control input {
+  width: 100%;
+  border: 1px solid #8aa399;
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+  text-align: center;
+}
+
+.bet-control span,
+.payout-preview {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.payout-preview {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  text-align: center;
+}
+
 .match-card button {
   width: 100%;
 }

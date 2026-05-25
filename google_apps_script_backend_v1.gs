@@ -165,6 +165,16 @@ function getStartingBalance_() {
   return Number.isFinite(value) ? value : 200;
 }
 
+function toWholeDollar_(value, fallback) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return fallback;
+  }
+
+  return Math.floor(numberValue);
+}
+
 function joinGame(input) {
   if (!input || !input.deviceId || !input.displayName) {
     throw new Error("joinGame requires deviceId and displayName.");
@@ -331,8 +341,8 @@ function savePick(input) {
   const playerId = String(input.playerId).trim();
   const matchId = String(input.matchId).trim();
   const selectedTeam = String(input.selectedTeam).trim();
-  const totalBetAmount = Math.max(1, Number(input.totalBetAmount) || 1);
   const houseBetAmount = Number(getSetting_("house_bet_amount")) || 1;
+  const totalBetAmount = Math.max(houseBetAmount, toWholeDollar_(input.totalBetAmount, houseBetAmount));
   const playerCashStake = Math.max(0, totalBetAmount - houseBetAmount);
   const timestamp = nowIso_();
 
@@ -363,6 +373,17 @@ function savePick(input) {
   const existingPickIndex = picks.findIndex((pick) => {
     return pick.player_id === playerId && pick.match_id === matchId && pick.status === "active";
   });
+  const existingPlayerCashStake = existingPickIndex >= 0
+    ? toNumber_(picks[existingPickIndex].player_cash_stake, 0)
+    : 0;
+  const activePicks = picks.filter((pick) => pick.status === "active");
+  const activity = getPlayerActivity_(playerId, activePicks);
+  const currentBalance = toNumber_(player.current_balance, getStartingBalance_());
+  const availableToBet = currentBalance - activity.pendingBets + existingPlayerCashStake;
+
+  if (playerCashStake > availableToBet) {
+    throw new Error(`You only have $${availableToBet.toFixed(0)} available to add to this pick.`);
+  }
 
   const pick = {
     pick_id: existingPickIndex >= 0 ? picks[existingPickIndex].pick_id : createId_("pick"),
