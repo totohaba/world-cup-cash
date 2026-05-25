@@ -395,3 +395,64 @@ h1 {
   color: var(--green);
   font-weight: 700;
 }
+
+.admin-matches-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-match-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.admin-match-card span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.score-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--green);
+  font-weight: 700;
+}
+
+.score-grid input {
+  width: 100%;
+  border: 1px solid #8aa399;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+}
+
+.admin-match-card button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: white;
+  background: var(--green);
+}
+
+.admin-match-card button:disabled {
+  opacity: 0.58;
+}
+
+.admin-match-status {
+  margin: 0;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}

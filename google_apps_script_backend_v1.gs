@@ -152,6 +152,19 @@ function updateObjectRow_(sheetName, rowNumber, item) {
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
 }
 
+function updateAllPlayerDerivedBalances_() {
+  const players = getSheetRows_("Players");
+  const activePicks = getActivePicks_();
+
+  players.forEach((player, index) => {
+    const currentBalance = toNumber_(player.current_balance, getStartingBalance_());
+    const activity = getPlayerActivity_(player.player_id, activePicks);
+    player.pending_bets = activity.pendingBets;
+    player.available_to_bet = currentBalance - activity.pendingBets;
+    updateObjectRow_("Players", index + 2, player);
+  });
+}
+
 function createId_(prefix) {
   return `${prefix}_${Utilities.getUuid()}`;
 }
@@ -578,6 +591,192 @@ function testGetLeaderboard() {
   return result;
 }
 
+function getMatchOutcome_(match) {
+  const teamAGoals = Number(match.team_a_goals);
+  const teamBGoals = Number(match.team_b_goals);
+
+  if (!Number.isFinite(teamAGoals) || !Number.isFinite(teamBGoals)) {
+    throw new Error("Match must have both team scores before settlement.");
+  }
+
+  if (teamAGoals === teamBGoals) {
+    return {
+      type: "draw",
+      winningTeam: "",
+    };
+  }
+
+  return {
+    type: "win_loss",
+    winningTeam: teamAGoals > teamBGoals ? match.team_a : match.team_b,
+  };
+}
+
+function settlePick_(pick, match, player, outcome, timestamp) {
+  const startingBalance = toNumber_(player.current_balance, getStartingBalance_());
+  const playerCashStake = toNumber_(pick.player_cash_stake, 0);
+  const totalPayout = outcome.type === "draw"
+    ? 0
+    : toNumber_(pick.potential_payout, 0);
+  let settlementType = "draw";
+  let endingBalance = startingBalance;
+
+  if (outcome.type === "draw") {
+    player.draws = toNumber_(player.draws, 0) + 1;
+  } else if (pick.selected_team === outcome.winningTeam) {
+    settlementType = "win";
+    endingBalance = startingBalance - playerCashStake + totalPayout;
+    player.current_balance = endingBalance;
+    player.total_winnings = toNumber_(player.total_winnings, 0) + totalPayout;
+    player.wins = toNumber_(player.wins, 0) + 1;
+  } else {
+    settlementType = "loss";
+    endingBalance = startingBalance - playerCashStake;
+    player.current_balance = endingBalance;
+    player.total_losses = toNumber_(player.total_losses, 0) + playerCashStake;
+    player.losses = toNumber_(player.losses, 0) + 1;
+  }
+
+  pick.status = settlementType === "win" ? "won" : settlementType === "loss" ? "lost" : "draw";
+  pick.settled_at = timestamp;
+  pick.updated_at = timestamp;
+
+  return {
+    settlement_id: createId_("settlement"),
+    player_id: player.player_id,
+    match_id: match.match_id,
+    pick_id: pick.pick_id,
+    settlement_type: settlementType,
+    starting_balance: startingBalance,
+    player_cash_stake: playerCashStake,
+    total_payout: totalPayout,
+    ending_balance: endingBalance,
+    created_at: timestamp,
+  };
+}
+
+function settleMatch(input) {
+  if (!input || !input.matchId) {
+    throw new Error("settleMatch requires matchId.");
+  }
+
+  const matchId = String(input.matchId).trim();
+  const matches = getSheetRows_("Matches");
+  const matchIndex = matches.findIndex((match) => match.match_id === matchId);
+
+  if (matchIndex < 0) {
+    throw new Error("Match not found.");
+  }
+
+  const match = matches[matchIndex];
+
+  if (match.status === "settled") {
+    throw new Error("Match is already settled.");
+  }
+
+  const outcome = getMatchOutcome_(match);
+  const timestamp = nowIso_();
+  const players = getSheetRows_("Players");
+  const picks = getSheetRows_("Picks");
+  const activeMatchPicks = picks
+    .map((pick, index) => ({ pick, index }))
+    .filter((item) => item.pick.match_id === matchId && item.pick.status === "active");
+  const logs = [];
+
+  activeMatchPicks.forEach((item) => {
+    const playerIndex = players.findIndex((player) => player.player_id === item.pick.player_id);
+
+    if (playerIndex < 0) {
+      return;
+    }
+
+    const log = settlePick_(item.pick, match, players[playerIndex], outcome, timestamp);
+    updateObjectRow_("Picks", item.index + 2, item.pick);
+    updateObjectRow_("Players", playerIndex + 2, players[playerIndex]);
+    appendObjectRow_("SettlementLog", log);
+    logs.push(log);
+  });
+
+  match.status = "settled";
+  updateObjectRow_("Matches", matchIndex + 2, match);
+  updateAllPlayerDerivedBalances_();
+
+  return {
+    settled: true,
+    matchId,
+    outcome,
+    settledPickCount: logs.length,
+    logs,
+  };
+}
+
+function saveMatchResult(input) {
+  if (!input || !input.matchId) {
+    throw new Error("saveMatchResult requires matchId.");
+  }
+
+  const matchId = String(input.matchId).trim();
+  const rawTeamAGoals = String(input.teamAGoals ?? "").trim();
+  const rawTeamBGoals = String(input.teamBGoals ?? "").trim();
+
+  if (!rawTeamAGoals || !rawTeamBGoals) {
+    throw new Error("Both scores are required.");
+  }
+
+  const teamAGoals = toWholeDollar_(input.teamAGoals, null);
+  const teamBGoals = toWholeDollar_(input.teamBGoals, null);
+
+  if (teamAGoals === null || teamBGoals === null) {
+    throw new Error("Both scores are required.");
+  }
+
+  if (teamAGoals < 0 || teamBGoals < 0) {
+    throw new Error("Scores cannot be negative.");
+  }
+
+  const matches = getSheetRows_("Matches");
+  const matchIndex = matches.findIndex((match) => match.match_id === matchId);
+
+  if (matchIndex < 0) {
+    throw new Error("Match not found.");
+  }
+
+  const match = matches[matchIndex];
+
+  if (match.status === "settled") {
+    throw new Error("Match is already settled.");
+  }
+
+  match.team_a_goals = teamAGoals;
+  match.team_b_goals = teamBGoals;
+  match.team_advanced = input.teamAdvanced ? String(input.teamAdvanced).trim() : match.team_advanced;
+  match.status = "final";
+  updateObjectRow_("Matches", matchIndex + 2, match);
+
+  if (String(input.settle || "") === "true") {
+    return settleMatch({
+      matchId,
+    });
+  }
+
+  return {
+    saved: true,
+    match: normalizeMatch_(match, indexBy_(getSheetRows_("Teams"), "team_slug")),
+  };
+}
+
+function testSettleMatch() {
+  const result = saveMatchResult({
+    matchId: "WC26-001",
+    teamAGoals: 1,
+    teamBGoals: 0,
+    settle: "true",
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function doGet(e) {
   try {
     const action = e.parameter.action;
@@ -623,6 +822,22 @@ function doGet(e) {
 
     if (action === "getLeaderboard") {
       return jsonResponse_(getLeaderboard());
+    }
+
+    if (action === "saveMatchResult") {
+      return jsonResponse_(saveMatchResult({
+        matchId: e.parameter.matchId,
+        teamAGoals: e.parameter.teamAGoals,
+        teamBGoals: e.parameter.teamBGoals,
+        teamAdvanced: e.parameter.teamAdvanced,
+        settle: e.parameter.settle,
+      }));
+    }
+
+    if (action === "settleMatch") {
+      return jsonResponse_(settleMatch({
+        matchId: e.parameter.matchId,
+      }));
     }
 
     return jsonResponse_({

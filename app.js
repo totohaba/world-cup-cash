@@ -261,11 +261,15 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
 
   list.innerHTML = matches
     .map((match) => {
-      const pickDisabled = player ? "" : "disabled";
+      const matchComplete = match.status === "final" || match.status === "settled";
+      const pickDisabled = player && !matchComplete ? "" : "disabled";
       const savedPick = picksByMatch[match.matchId];
       const teamASelected = savedPick?.selectedTeam === match.teamASlug ? "selected" : "";
       const teamBSelected = savedPick?.selectedTeam === match.teamBSlug ? "selected" : "";
-      const statusText = getPickStatusText(savedPick);
+      const finalScore = `${match.teamAGoals} - ${match.teamBGoals}`;
+      const statusText = matchComplete
+        ? `Final: ${match.teamA.team} ${finalScore} ${match.teamB.team}`
+        : getPickStatusText(savedPick);
       const maxTotalBet = getMaxTotalBet(savedPick);
       const totalBetAmount = Math.min(
         maxTotalBet,
@@ -283,7 +287,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
           </div>
           <div class="match-center">
             <strong>VS</strong>
-            <span>${match.matchDateTime}</span>
+            <span>${matchComplete ? finalScore : match.matchDateTime}</span>
           </div>
           <div class="team right">
             <span class="team-code">${match.teamB.teamSlug}</span>
