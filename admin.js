@@ -39,6 +39,19 @@ async function callAdminApi(action, params = {}) {
   return result;
 }
 
+async function loadAdminPhasePickSummary(phaseName) {
+  try {
+    const result = await callAdminApi("getPhasePickSummary", {
+      phase: phaseName,
+    });
+
+    return { summaries: result.summaries || {}, error: null };
+  } catch (error) {
+    console.error(error);
+    return { summaries: {}, error };
+  }
+}
+
 function renderAdminMatches(matches) {
   const list = document.querySelector("#admin-matches-list");
 
@@ -176,14 +189,14 @@ async function loadAdminMatches() {
     const matchesResult = await callAdminApi("getMatches", {
       phase: gameState.activePhaseName,
     });
-    const summaryResult = await callAdminApi("getPhasePickSummary", {
-      phase: gameState.activePhaseName,
-    });
+    const summaryResult = await loadAdminPhasePickSummary(gameState.activePhaseName);
 
     activeGameState = gameState;
     adminMatches = matchesResult.matches;
     adminPickSummaryByMatch = summaryResult.summaries;
-    status.textContent = `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
+    status.textContent = summaryResult.error
+      ? `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
+      : `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderAdminMatches(adminMatches);
     loadSettlementLog();
   } catch (error) {

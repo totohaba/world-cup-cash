@@ -83,6 +83,19 @@ async function loadPlayerPickHistory(player, phaseName) {
   }
 }
 
+async function loadPhasePickSummary(phaseName) {
+  try {
+    const result = await callApi("getPhasePickSummary", {
+      phase: phaseName,
+    });
+
+    return { summaries: result.summaries || {}, error: null };
+  } catch (error) {
+    console.error(error);
+    return { summaries: {}, error };
+  }
+}
+
 function getOrCreateDeviceId() {
   const existingId = localStorage.getItem(STORAGE_KEYS.deviceId);
 
@@ -600,9 +613,7 @@ async function loadGameState() {
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
-    const summaryResult = await callApi("getPhasePickSummary", {
-      phase: gameState.activePhaseName,
-    });
+    const summaryResult = await loadPhasePickSummary(gameState.activePhaseName);
     const picksResult = await loadPlayerPickHistory(player, gameState.activePhaseName);
 
     activePickSummaryByMatch = summaryResult.summaries;
@@ -612,6 +623,8 @@ async function loadGameState() {
     phaseName.textContent = gameState.activePhaseName;
     status.textContent = picksResult.error
       ? `${gameState.gameStatus} - ${matchesResult.count} matches - saved picks unavailable: ${picksResult.error.message}`
+      : summaryResult.error
+        ? `${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
       : gameState.gameStatus === "locked"
         ? `Phase locked - ${matchesResult.count} matches`
         : `${gameState.gameStatus} - ${matchesResult.count} matches`;
