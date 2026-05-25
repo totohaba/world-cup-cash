@@ -25,7 +25,13 @@ async function callApi(action, params = {}) {
     throw new Error(`API request failed: ${response.status}`);
   }
 
-  return response.json();
+  const result = await response.json();
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  return result;
 }
 
 function getOrCreateDeviceId() {
@@ -184,7 +190,7 @@ async function handlePickClick(event) {
     status.textContent = `Saved: ${result.pick.selected_team} for $1 house bet`;
   } catch (error) {
     console.error(error);
-    status.textContent = "Could not save pick. Please try again.";
+    status.textContent = `Could not save pick: ${error.message}`;
   } finally {
     buttons.forEach((item) => {
       item.disabled = false;

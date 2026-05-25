@@ -350,8 +350,11 @@ function savePick(input) {
     throw new Error("Match not found.");
   }
 
-  if (match.status && match.status !== "future") {
-    throw new Error("Picks are only allowed for future matches.");
+  const matchStatus = String(match.status || "future").trim();
+  const pickableStatuses = ["future", "open", "setup"];
+
+  if (!pickableStatuses.includes(matchStatus)) {
+    throw new Error(`Picks are not allowed for matches with status: ${matchStatus}.`);
   }
 
   const decimalOdds = getDecimalOddsForSelection_(match, selectedTeam);
@@ -406,38 +409,44 @@ function testSavePick() {
 }
 
 function doGet(e) {
-  const action = e.parameter.action;
+  try {
+    const action = e.parameter.action;
 
-  if (action === "getGameState") {
-    return jsonResponse_(getGameState());
+    if (action === "getGameState") {
+      return jsonResponse_(getGameState());
+    }
+
+    if (action === "getMatches") {
+      return jsonResponse_(getMatches({
+        phase: e.parameter.phase,
+      }));
+    }
+
+    if (action === "joinGame") {
+      return jsonResponse_(joinGame({
+        deviceId: e.parameter.deviceId,
+        displayName: e.parameter.displayName,
+      }));
+    }
+
+    if (action === "savePick") {
+      return jsonResponse_(savePick({
+        playerId: e.parameter.playerId,
+        matchId: e.parameter.matchId,
+        selectedTeam: e.parameter.selectedTeam,
+        totalBetAmount: e.parameter.totalBetAmount,
+      }));
+    }
+
+    return jsonResponse_({
+      error: `Unknown action: ${action}`,
+      action,
+    });
+  } catch (error) {
+    return jsonResponse_({
+      error: error.message,
+    });
   }
-
-  if (action === "getMatches") {
-    return jsonResponse_(getMatches({
-      phase: e.parameter.phase,
-    }));
-  }
-
-  if (action === "joinGame") {
-    return jsonResponse_(joinGame({
-      deviceId: e.parameter.deviceId,
-      displayName: e.parameter.displayName,
-    }));
-  }
-
-  if (action === "savePick") {
-    return jsonResponse_(savePick({
-      playerId: e.parameter.playerId,
-      matchId: e.parameter.matchId,
-      selectedTeam: e.parameter.selectedTeam,
-      totalBetAmount: e.parameter.totalBetAmount,
-    }));
-  }
-
-  return jsonResponse_({
-    error: "Unknown action",
-    action,
-  });
 }
 
 function jsonResponse_(data) {
