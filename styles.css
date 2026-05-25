@@ -324,6 +324,26 @@ h1 {
   gap: 10px;
 }
 
+.pick-activity {
+  grid-column: 1 / -1;
+  padding: 10px;
+  border-radius: 8px;
+  background: #eef5f1;
+}
+
+.pick-activity strong {
+  display: block;
+  color: var(--green);
+  font-size: 14px;
+}
+
+.pick-activity span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .bet-control {
   grid-column: 1 / -1;
   display: grid;

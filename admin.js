@@ -5,6 +5,7 @@ const ADMIN_CONFIG = {
 let adminMatches = [];
 let activeStatusFilter = "all";
 let activeGameState = null;
+let adminPickSummaryByMatch = {};
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -67,12 +68,29 @@ function renderAdminMatches(matches) {
       const settled = match.status === "settled";
       const teamAGoals = match.teamAGoals ?? "";
       const teamBGoals = match.teamBGoals ?? "";
+      const summary = adminPickSummaryByMatch[match.matchId];
+      const teamACount = summary?.selections?.[match.teamASlug] || 0;
+      const teamBCount = summary?.selections?.[match.teamBSlug] || 0;
+      const activityText = summary?.totalPickCount
+        ? `${summary.totalPickCount} picks - ${match.teamA.team}: ${teamACount} - ${match.teamB.team}: ${teamBCount}`
+        : "No picks yet";
+      const moneyText = summary?.totalPickCount
+        ? `Total bet ${formatAdminMoney(summary.totalBetAmount)} - pending ${formatAdminMoney(summary.totalPlayerCashStake)}`
+        : "";
+      const recentPicks = summary?.recentPicks?.length
+        ? summary.recentPicks.slice(-4).map((pick) => `${pick.playerName}: ${pick.selectedTeam}`).join(", ")
+        : "";
 
       return `
         <article class="admin-match-card" data-match-id="${match.matchId}">
           <div>
             <strong>${match.teamA.team} vs ${match.teamB.team}</strong>
             <span>${match.matchId} - ${match.status}</span>
+          </div>
+          <div class="pick-activity">
+            <strong>${activityText}</strong>
+            ${moneyText ? `<span>${moneyText}</span>` : ""}
+            ${recentPicks ? `<span>${recentPicks}</span>` : ""}
           </div>
           <div class="score-grid">
             <label>
@@ -158,9 +176,13 @@ async function loadAdminMatches() {
     const matchesResult = await callAdminApi("getMatches", {
       phase: gameState.activePhaseName,
     });
+    const summaryResult = await callAdminApi("getPhasePickSummary", {
+      phase: gameState.activePhaseName,
+    });
 
     activeGameState = gameState;
     adminMatches = matchesResult.matches;
+    adminPickSummaryByMatch = summaryResult.summaries;
     status.textContent = `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderAdminMatches(adminMatches);
     loadSettlementLog();

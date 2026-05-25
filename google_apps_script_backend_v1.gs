@@ -617,6 +617,76 @@ function getPlayerPickHistory(input) {
   };
 }
 
+function getPhasePickSummary(input) {
+  const activePhaseName = getSetting_("active_phase");
+  const phaseName = input && input.phase ? String(input.phase).trim() : activePhaseName;
+  const matches = getSheetRows_("Matches").filter((match) => match.phase === phaseName);
+  const picks = getSheetRows_("Picks").filter((pick) => pick.phase === phaseName);
+  const playersById = indexBy_(getSheetRows_("Players"), "player_id");
+  const summaries = matches.reduce((index, match) => {
+    index[match.match_id] = {
+      matchId: match.match_id,
+      phase: match.phase,
+      activePickCount: 0,
+      settledPickCount: 0,
+      totalPickCount: 0,
+      totalBetAmount: 0,
+      totalPlayerCashStake: 0,
+      potentialPayout: 0,
+      selections: {},
+      recentPicks: [],
+    };
+    return index;
+  }, {});
+
+  picks.forEach((pick) => {
+    const summary = summaries[pick.match_id];
+
+    if (!summary) {
+      return;
+    }
+
+    const status = String(pick.status || "").trim();
+    const selectedTeam = pick.selected_team || "unknown";
+    const totalBetAmount = toNumber_(pick.total_bet_amount, 0);
+    const playerCashStake = toNumber_(pick.player_cash_stake, 0);
+    const potentialPayout = toNumber_(pick.potential_payout, 0);
+    const player = playersById[pick.player_id];
+
+    summary.totalPickCount += 1;
+    summary.totalBetAmount += totalBetAmount;
+    summary.totalPlayerCashStake += playerCashStake;
+    summary.selections[selectedTeam] = (summary.selections[selectedTeam] || 0) + 1;
+
+    if (status === "active") {
+      summary.activePickCount += 1;
+      summary.potentialPayout += potentialPayout;
+    } else if (status === "won" || status === "lost" || status === "draw") {
+      summary.settledPickCount += 1;
+    }
+
+    summary.recentPicks.push({
+      playerName: player ? player.display_name : pick.player_id,
+      selectedTeam,
+      totalBetAmount,
+      status,
+    });
+  });
+
+  return {
+    phaseName,
+    summaries,
+  };
+}
+
+function testGetPhasePickSummary() {
+  const result = getPhasePickSummary({
+    phase: "Group Matchday 1",
+  });
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function testGetPlayerPicks() {
   const players = getSheetRows_("Players");
   const result = getPlayerPicks({
@@ -1008,6 +1078,12 @@ function doGet(e) {
         matchId: e.parameter.matchId,
         playerId: e.parameter.playerId,
         limit: e.parameter.limit,
+      }));
+    }
+
+    if (action === "getPhasePickSummary") {
+      return jsonResponse_(getPhasePickSummary({
+        phase: e.parameter.phase,
       }));
     }
 

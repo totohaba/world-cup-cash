@@ -13,6 +13,7 @@ let activeLeaderboard = [];
 let activeProfile = null;
 let activePickHistory = [];
 let activeGameState = null;
+let activePickSummaryByMatch = {};
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -199,6 +200,26 @@ function getPayoutText(match, selectedTeam, totalBetAmount) {
   return `Potential Payout ${formatMoney(totalBetAmount * odds, { cents: true })}`;
 }
 
+function getSelectionCount(summary, teamSlug) {
+  return summary?.selections?.[teamSlug] || 0;
+}
+
+function getPickActivityText(match, summary) {
+  if (!summary || !summary.totalPickCount) {
+    return "No picks yet";
+  }
+
+  return `${summary.totalPickCount} picks - ${match.teamA.team}: ${getSelectionCount(summary, match.teamASlug)} - ${match.teamB.team}: ${getSelectionCount(summary, match.teamBSlug)}`;
+}
+
+function getPickMoneyText(summary) {
+  if (!summary || !summary.totalPickCount) {
+    return "";
+  }
+
+  return `Total bet ${formatMoney(summary.totalBetAmount)} - pending cash ${formatMoney(summary.totalPlayerCashStake)} - potential ${formatMoney(summary.potentialPayout, { cents: true })}`;
+}
+
 function renderLeaderboard(players = activeLeaderboard) {
   const list = document.querySelector("#leaderboard-list");
 
@@ -355,6 +376,9 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
       );
       const selectedTeam = savedPick?.selectedTeam || "";
       const payoutText = getPayoutText(match, selectedTeam, totalBetAmount);
+      const pickSummary = activePickSummaryByMatch[match.matchId];
+      const activityText = getPickActivityText(match, pickSummary);
+      const moneyText = getPickMoneyText(pickSummary);
 
       return `
         <article class="match-card" data-match-id="${match.matchId}">
@@ -379,6 +403,10 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
             <button class="${teamBSelected}" type="button" data-selected-team="${match.teamBSlug}" ${pickDisabled}>
               Pick ${match.teamB.team}
             </button>
+          </div>
+          <div class="pick-activity">
+            <strong>${activityText}</strong>
+            ${moneyText ? `<span>${moneyText}</span>` : ""}
           </div>
           <div class="bet-control">
             <label for="bet-${match.matchId}">Total Bet</label>
@@ -572,8 +600,12 @@ async function loadGameState() {
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
+    const summaryResult = await callApi("getPhasePickSummary", {
+      phase: gameState.activePhaseName,
+    });
     const picksResult = await loadPlayerPickHistory(player, gameState.activePhaseName);
 
+    activePickSummaryByMatch = summaryResult.summaries;
     activePicksByMatch = indexPicksByMatch(picksResult.picks);
     await loadSummaryData();
 
