@@ -231,7 +231,7 @@ h1 {
 }
 
 .player-panel {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1519,16 +1519,16 @@ h1 {
   }
 
   .app-shell {
-    padding: 20px 10px 88px;
+    padding: 14px 8px 82px;
   }
 
   .app-logo {
-    width: 178px;
+    width: 170px;
   }
 
   .balance-card {
-    min-width: 96px;
-    padding: 8px;
+    min-width: 94px;
+    padding: 7px;
   }
 
   .balance-card span {
@@ -1536,32 +1536,94 @@ h1 {
   }
 
   .balance-card strong {
-    font-size: 18px;
+    font-size: 17px;
   }
 
-  .featured-match-card {
-    grid-template-columns: minmax(0, 1fr) 94px minmax(0, 1fr);
-    min-height: 210px;
-    padding-top: 42px;
-    padding-right: 10px;
-    padding-left: 10px;
+  .player-design-header {
+    gap: 8px;
+    margin-bottom: 10px;
   }
 
-  .featured-player {
-    width: 126px;
+  .phase-progress-card {
+    padding: 10px 10px 8px;
   }
 
-  .featured-flag {
-    width: 58px;
-    height: 38px;
+  .phase-progress-card h2 {
+    margin-bottom: 3px;
+    font-size: 16px;
   }
 
-  .featured-team strong {
+  .phase-progress-card p {
+    margin-bottom: 8px;
     font-size: 12px;
   }
 
+  .phase-timeline::before {
+    top: 11px;
+    right: 7%;
+    left: 7%;
+  }
+
+  .phase-pill {
+    min-height: 32px;
+    gap: 2px;
+  }
+
+  .phase-pill strong {
+    font-size: 8px;
+  }
+
+  .phase-dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  .phase-pill.active .phase-dot {
+    width: 22px;
+    height: 22px;
+    border-width: 6px;
+  }
+
+  .matches-panel {
+    margin-top: 10px;
+    padding: 12px 10px 14px;
+  }
+
+  .panel-heading {
+    margin-bottom: 8px;
+  }
+
+  .matches-panel h2 {
+    font-size: 20px;
+  }
+
+  .panel-heading button {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .featured-match-card {
+    grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr);
+    min-height: 208px;
+    padding: 36px 8px 14px;
+  }
+
+  .featured-player {
+    bottom: -22px;
+    width: 162px;
+  }
+
+  .featured-flag {
+    width: 54px;
+    height: 36px;
+  }
+
+  .featured-team strong {
+    font-size: 11px;
+  }
+
   .featured-center strong {
-    font-size: 28px;
+    font-size: 27px;
   }
 
   .featured-label {
@@ -1571,51 +1633,54 @@ h1 {
   }
 
   .featured-center button {
-    padding: 8px 10px;
-    font-size: 12px;
+    padding: 8px 9px;
+    font-size: 11px;
   }
 
   .match-row-card {
-    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
-    gap: 8px;
-    padding: 12px;
-  }
-
-  .match-row-card button,
-  .match-row-card .match-list-status {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 58px) 62px minmax(0, 58px) 72px;
+    gap: 5px;
+    padding: 9px 8px;
+    min-height: 86px;
   }
 
   .team-flag {
-    width: 46px;
-    height: 31px;
+    width: 42px;
+    height: 28px;
   }
 
-  .phase-progress-card {
-    padding: 14px 12px 10px;
+  .match-row-team {
+    gap: 3px;
   }
 
-  .phase-progress-card h2 {
-    font-size: 17px;
+  .match-row-team strong {
+    font-size: 9px;
+    line-height: 1.05;
+    word-break: normal;
+    overflow-wrap: anywhere;
   }
 
-  .phase-progress-card p {
-    font-size: 13px;
+  .match-row-center {
+    gap: 1px;
   }
 
-  .phase-pill strong {
+  .match-row-center span {
     font-size: 9px;
   }
 
-  .phase-dot {
-    width: 13px;
-    height: 13px;
+  .match-row-center strong {
+    font-size: 17px;
   }
 
-  .phase-pill.active .phase-dot {
-    width: 24px;
-    height: 24px;
-    border-width: 7px;
+  .match-row-card button {
+    min-width: 68px;
+    padding: 7px 5px;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .match-row-card .match-list-status {
+    display: none;
   }
 
   .detail-teams-grid {
