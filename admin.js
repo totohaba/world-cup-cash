@@ -6,6 +6,7 @@ let adminMatches = [];
 let activeStatusFilter = "all";
 let activeGameState = null;
 let adminPickSummaryByMatch = {};
+let adminDashboard = null;
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -52,6 +53,18 @@ async function loadAdminPhasePickSummary(phaseName) {
   }
 }
 
+function getAdminTeamNameForSlug(match, slug) {
+  if (slug === match.teamASlug) {
+    return match.teamA.team;
+  }
+
+  if (slug === match.teamBSlug) {
+    return match.teamB.team;
+  }
+
+  return slug;
+}
+
 function renderAdminMatches(matches) {
   const list = document.querySelector("#admin-matches-list");
 
@@ -91,7 +104,7 @@ function renderAdminMatches(matches) {
         ? `Total bet ${formatAdminMoney(summary.totalBetAmount)} - pending ${formatAdminMoney(summary.totalPlayerCashStake)}`
         : "";
       const recentPicks = summary?.recentPicks?.length
-        ? summary.recentPicks.slice(-4).map((pick) => `${pick.playerName}: ${pick.selectedTeam}`).join(", ")
+        ? summary.recentPicks.slice(-4).map((pick) => `${pick.playerName}: ${getAdminTeamNameForSlug(match, pick.selectedTeam)}`).join(", ")
         : "";
 
       return `
@@ -115,11 +128,48 @@ function renderAdminMatches(matches) {
               <input type="number" min="0" step="1" value="${teamBGoals}" data-team-b-goals ${settled ? "disabled" : ""} />
             </label>
           </div>
-          <button type="button" data-settle-match ${settled ? "disabled" : ""}>
-            ${settled ? "Settled" : "Save and Settle"}
-          </button>
+          <div class="admin-match-actions">
+            <button type="button" data-save-score ${settled ? "disabled" : ""}>Save Score</button>
+            <button type="button" data-settle-match ${settled ? "disabled" : ""}>
+              ${settled ? "Settled" : "Save and Settle"}
+            </button>
+          </div>
           <p class="admin-match-status" aria-live="polite"></p>
         </article>
+      `;
+    })
+    .join("");
+}
+
+function renderAdminDashboard() {
+  const stats = document.querySelector("#admin-dashboard-stats");
+
+  if (!stats || !activeGameState) {
+    return;
+  }
+
+  const summaries = Object.values(adminPickSummaryByMatch);
+  const activePickCount = summaries.reduce((total, summary) => total + (Number(summary.activePickCount) || 0), 0);
+  const pendingCash = summaries.reduce((total, summary) => total + (Number(summary.totalPlayerCashStake) || 0), 0);
+  const potentialPayout = summaries.reduce((total, summary) => total + (Number(summary.potentialPayout) || 0), 0);
+  const settledCount = adminMatches.filter((match) => match.status === "settled").length;
+  const openCount = adminMatches.length - settledCount;
+  const playerCount = adminDashboard?.playerCount ?? activeGameState.playerCount ?? 0;
+
+  stats.innerHTML = [
+    ["Players", playerCount],
+    ["Open Matches", openCount],
+    ["Active Picks", activePickCount],
+    ["Pending Cash", formatAdminMoney(pendingCash)],
+    ["Potential", formatAdminMoney(potentialPayout, { cents: true })],
+    ["Settled", settledCount],
+  ]
+    .map(([label, value]) => {
+      return `
+        <div class="mini-stat">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </div>
       `;
     })
     .join("");
@@ -179,11 +229,39 @@ async function loadSettlementLog() {
   }
 }
 
+async function loadAdminSnapshot() {
+  try {
+    const result = await callAdminApi("getAdminSnapshot");
+    return { result, error: null };
+  } catch (error) {
+    console.error(error);
+    return { result: null, error };
+  }
+}
+
 async function loadAdminMatches() {
   const status = document.querySelector("#admin-status");
 
   try {
     status.textContent = "Loading matches...";
+
+    const snapshot = await loadAdminSnapshot();
+
+    if (snapshot.result) {
+      const result = snapshot.result;
+
+      activeGameState = result.gameState;
+      adminMatches = result.matches.matches;
+      adminPickSummaryByMatch = result.pickSummary?.summaries || {};
+      adminDashboard = result.dashboard;
+      status.textContent = result.pickSummary?.error
+        ? `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
+        : `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches`;
+      renderAdminDashboard();
+      renderAdminMatches(adminMatches);
+      renderSettlementLog(result.settlementLog?.logs || []);
+      return;
+    }
 
     const gameState = await callAdminApi("getGameState");
     const matchesResult = await callAdminApi("getMatches", {
@@ -194,9 +272,11 @@ async function loadAdminMatches() {
     activeGameState = gameState;
     adminMatches = matchesResult.matches;
     adminPickSummaryByMatch = summaryResult.summaries;
+    adminDashboard = null;
     status.textContent = summaryResult.error
       ? `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
       : `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
+    renderAdminDashboard();
     renderAdminMatches(adminMatches);
     loadSettlementLog();
   } catch (error) {
@@ -234,35 +314,43 @@ async function handleAdminActionClick(event) {
 }
 
 async function handleSettleClick(event) {
-  const button = event.target.closest("[data-settle-match]");
+  const button = event.target.closest("[data-settle-match], [data-save-score]");
 
   if (!button) {
     return;
   }
 
+  const shouldSettle = button.hasAttribute("data-settle-match");
   const card = button.closest("[data-match-id]");
   const status = card.querySelector(".admin-match-status");
   const matchId = card.dataset.matchId;
   const teamAGoals = card.querySelector("[data-team-a-goals]").value;
   const teamBGoals = card.querySelector("[data-team-b-goals]").value;
 
+  if (shouldSettle && !confirm("Save this score and settle all active picks for this match?")) {
+    return;
+  }
+
   button.disabled = true;
-  status.textContent = "Saving result and settling picks...";
+  status.textContent = shouldSettle ? "Saving result and settling picks..." : "Saving score...";
 
   try {
     const result = await callAdminApi("saveMatchResult", {
       matchId,
       teamAGoals,
       teamBGoals,
-      settle: "true",
+      settle: shouldSettle ? "true" : "false",
     });
 
-    status.textContent = `Settled ${result.settledPickCount} picks`;
+    status.textContent = shouldSettle
+      ? `Settled ${result.settledPickCount} picks`
+      : "Score saved";
     await loadAdminMatches();
-    await loadSettlementLog();
   } catch (error) {
     console.error(error);
-    status.textContent = `Could not settle: ${error.message}`;
+    status.textContent = shouldSettle
+      ? `Could not settle: ${error.message}`
+      : `Could not save score: ${error.message}`;
     button.disabled = false;
   }
 }

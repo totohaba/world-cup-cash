@@ -98,6 +98,35 @@ h1 {
   background: var(--cream);
 }
 
+.mini-stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mini-stat {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(6, 70, 47, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.mini-stat span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mini-stat strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--green);
+  font-size: 18px;
+}
+
 .phase-card h2,
 .panel h2 {
   margin-bottom: 8px;
@@ -481,6 +510,10 @@ h1 {
   margin-bottom: 14px;
 }
 
+.match-filter-tabs {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .phase-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -549,6 +582,12 @@ h1 {
   border-radius: 8px;
   padding: 10px;
   font: inherit;
+}
+
+.admin-match-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .admin-match-card button {

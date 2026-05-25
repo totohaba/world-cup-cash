@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash</title>
-    <link rel="stylesheet" href="styles.css?v=pick-activity-3" />
+    <link rel="stylesheet" href="styles.css?v=snapshot-dashboard-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -22,6 +22,7 @@
       <section class="phase-card">
         <h2 id="phase-name">Group Matchday 1</h2>
         <p id="phase-status">Loading game state...</p>
+        <div id="player-snapshot-stats" class="mini-stat-row"></div>
       </section>
 
       <section id="join-panel" class="panel join-panel" hidden>
@@ -44,6 +45,12 @@
           <div class="panel-heading">
             <h2>Active Matches</h2>
             <button id="refresh-button" type="button">Refresh</button>
+          </div>
+          <div class="filter-tabs match-filter-tabs" aria-label="Match filters">
+            <button class="active" type="button" data-match-filter="all">All</button>
+            <button type="button" data-match-filter="unpicked">Need Pick</button>
+            <button type="button" data-match-filter="mine">My Picks</button>
+            <button type="button" data-match-filter="settled">Final</button>
           </div>
           <div id="matches-list" class="matches-list"></div>
         </section>
@@ -82,6 +89,6 @@
       </nav>
     </main>
 
-    <script src="app.js?v=pick-activity-3"></script>
+    <script src="app.js?v=snapshot-dashboard-1"></script>
   </body>
 </html>

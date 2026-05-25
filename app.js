@@ -14,6 +14,7 @@ let activeProfile = null;
 let activePickHistory = [];
 let activeGameState = null;
 let activePickSummaryByMatch = {};
+let activeMatchFilter = "all";
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -159,7 +160,7 @@ function getPickStatusText(pick) {
     return "";
   }
 
-  return `Saved: ${pick.selectedTeam} for ${formatMoney(pick.totalBetAmount)} total bet`;
+  return `Saved: ${pick.selectedTeamName || pick.selectedTeam} for ${formatMoney(pick.totalBetAmount)} total bet`;
 }
 
 function getPickOutcomeText(pick) {
@@ -231,6 +232,63 @@ function getPickMoneyText(summary) {
   }
 
   return `Total bet ${formatMoney(summary.totalBetAmount)} - pending cash ${formatMoney(summary.totalPlayerCashStake)} - potential ${formatMoney(summary.potentialPayout, { cents: true })}`;
+}
+
+function getTeamNameForSlug(match, slug) {
+  if (!match) {
+    return slug;
+  }
+
+  if (slug === match.teamASlug) {
+    return match.teamA.team;
+  }
+
+  if (slug === match.teamBSlug) {
+    return match.teamB.team;
+  }
+
+  return slug;
+}
+
+function enrichPickWithMatch(pick, match) {
+  if (!pick || !match) {
+    return pick;
+  }
+
+  return {
+    ...pick,
+    selectedTeamName: getTeamNameForSlug(match, pick.selectedTeam),
+  };
+}
+
+function renderPlayerSnapshotStats() {
+  const stats = document.querySelector("#player-snapshot-stats");
+
+  if (!stats) {
+    return;
+  }
+
+  const totalMatches = activeMatches.length;
+  const pickedCount = activeMatches.filter((match) => activePicksByMatch[match.matchId]).length;
+  const remainingCount = Math.max(0, totalMatches - pickedCount);
+  const available = activeProfile ? formatMoney(activeProfile.availableToBet) : "--";
+  const potential = activeProfile ? formatMoney(activeProfile.potentialPayout, { cents: true }) : "--";
+
+  stats.innerHTML = [
+    ["Picked", `${pickedCount}/${totalMatches}`],
+    ["Remaining", remainingCount],
+    ["Available", available],
+    ["Potential", potential],
+  ]
+    .map(([label, value]) => {
+      return `
+        <div class="mini-stat">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderLeaderboard(players = activeLeaderboard) {
@@ -315,13 +373,14 @@ function renderPickHistory(picks = activePickHistory) {
       const label = match
         ? `${match.teamA.team} vs ${match.teamB.team}`
         : pick.matchId;
+      const selectedTeamName = match ? getTeamNameForSlug(match, pick.selectedTeam) : pick.selectedTeam;
       const amount = `${formatMoney(pick.totalBetAmount)} at ${pick.decimalOdds}x`;
 
       return `
         <article class="pick-history-row">
           <div>
             <strong>${label}</strong>
-            <span>Pick: ${pick.selectedTeam} - ${amount}</span>
+            <span>Pick: ${selectedTeamName} - ${amount}</span>
           </div>
           <div class="pick-history-status ${pick.status}">
             ${pick.status}
@@ -370,12 +429,38 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
 
   activeMatches = matches;
 
-  list.innerHTML = matches
+  const filteredMatches = matches.filter((match) => {
+    const savedPick = picksByMatch[match.matchId];
+    const matchComplete = match.status === "final" || match.status === "settled";
+
+    if (activeMatchFilter === "unpicked") {
+      return !savedPick && !matchComplete;
+    }
+
+    if (activeMatchFilter === "mine") {
+      return Boolean(savedPick);
+    }
+
+    if (activeMatchFilter === "settled") {
+      return matchComplete;
+    }
+
+    return true;
+  });
+
+  renderPlayerSnapshotStats();
+
+  if (!filteredMatches.length) {
+    list.innerHTML = `<p class="empty-state">No matches in this filter.</p>`;
+    return;
+  }
+
+  list.innerHTML = filteredMatches
     .map((match) => {
       const matchComplete = match.status === "final" || match.status === "settled";
       const readOnly = matchComplete || gameLocked;
       const pickDisabled = player && !readOnly ? "" : "disabled";
-      const savedPick = picksByMatch[match.matchId];
+      const savedPick = enrichPickWithMatch(picksByMatch[match.matchId], match);
       const teamASelected = savedPick?.selectedTeam === match.teamASlug ? "selected" : "";
       const teamBSelected = savedPick?.selectedTeam === match.teamBSlug ? "selected" : "";
       const finalScore = `${match.teamAGoals} - ${match.teamBGoals}`;
@@ -519,10 +604,14 @@ async function handlePickClick(event) {
     activePicksByMatch[matchId] = {
       matchId: result.pick.match_id,
       selectedTeam: result.pick.selected_team,
+      selectedTeamName: getTeamNameForSlug(
+        activeMatches.find((match) => match.matchId === matchId),
+        result.pick.selected_team
+      ),
       totalBetAmount: Number(result.pick.total_bet_amount) || 1,
       playerCashStake: Number(result.pick.player_cash_stake) || 0,
     };
-    status.textContent = `Saved: ${result.pick.selected_team} for ${formatMoney(result.pick.total_bet_amount)} total bet`;
+    status.textContent = `Saved: ${activePicksByMatch[matchId].selectedTeamName} for ${formatMoney(result.pick.total_bet_amount)} total bet`;
     loadSummaryData();
   } catch (error) {
     console.error(error);
@@ -595,8 +684,22 @@ async function loadSummaryData() {
       ...indexPicksByMatch(activePickHistory),
     };
     renderMatches(activeMatches, activePicksByMatch);
+    renderPlayerSnapshotStats();
   } catch (error) {
     console.error(error);
+  }
+}
+
+async function loadPlayerSnapshot(player) {
+  try {
+    const result = await callApi("getPlayerSnapshot", {
+      playerId: player?.player_id,
+    });
+
+    return { result, error: null };
+  } catch (error) {
+    console.error(error);
+    return { result: null, error };
   }
 }
 
@@ -607,9 +710,41 @@ async function loadGameState() {
   try {
     status.textContent = "Loading live game data...";
 
+    const player = getSavedPlayer();
+    const snapshot = await loadPlayerSnapshot(player);
+
+    if (snapshot.result) {
+      const result = snapshot.result;
+
+      activeGameState = result.gameState;
+      activePickSummaryByMatch = result.pickSummary?.summaries || {};
+      activePicksByMatch = indexPicksByMatch(result.playerPicks?.picks || []);
+      activeLeaderboard = result.leaderboard?.players || [];
+      activeProfile = result.profile?.player || null;
+      activePickHistory = result.pickHistory?.picks || [];
+      activeMatches = result.matches?.matches || [];
+
+      phaseName.textContent = result.gameState.activePhaseName;
+      status.textContent = result.pickSummary?.error
+        ? `${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
+        : result.gameState.gameStatus === "locked"
+          ? `Phase locked - ${result.matches.count} matches`
+          : `${result.gameState.gameStatus} - ${result.matches.count} matches`;
+      renderLeaderboard(activeLeaderboard);
+      renderProfile(activeProfile);
+      renderPickHistory(activePickHistory);
+      renderMatches(activeMatches, activePicksByMatch);
+      renderPlayerSnapshotStats();
+
+      if (activeProfile) {
+        document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
+      }
+
+      return;
+    }
+
     const gameState = await callApi("getGameState");
     activeGameState = gameState;
-    const player = getSavedPlayer();
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
@@ -635,6 +770,20 @@ async function loadGameState() {
   }
 }
 
+function handleMatchFilterClick(event) {
+  const button = event.target.closest("[data-match-filter]");
+
+  if (!button) {
+    return;
+  }
+
+  activeMatchFilter = button.dataset.matchFilter;
+  document.querySelectorAll("[data-match-filter]").forEach((item) => {
+    item.classList.toggle("active", item === button);
+  });
+  renderMatches(activeMatches, activePicksByMatch);
+}
+
 document.querySelector("#refresh-button")?.addEventListener("click", loadGameState);
 document.querySelectorAll(".refresh-data-button").forEach((button) => {
   button.addEventListener("click", loadSummaryData);
@@ -643,6 +792,7 @@ document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmi
 document.querySelector("#matches-list")?.addEventListener("click", handlePickClick);
 document.querySelector("#matches-list")?.addEventListener("change", handleBetAmountInput);
 document.querySelector("#matches-list")?.addEventListener("input", handleBetAmountInput);
+document.querySelector(".match-filter-tabs")?.addEventListener("click", handleMatchFilterClick);
 document.querySelector(".bottom-nav")?.addEventListener("click", (event) => {
   const link = event.target.closest("[data-view]");
 

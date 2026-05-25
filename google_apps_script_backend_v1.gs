@@ -788,6 +788,104 @@ function testGetLeaderboard() {
   return result;
 }
 
+function getPickSummarySafely_(phaseName) {
+  try {
+    return {
+      ...getPhasePickSummary({ phase: phaseName }),
+      error: "",
+    };
+  } catch (error) {
+    return {
+      phaseName,
+      summaries: {},
+      error: error.message,
+    };
+  }
+}
+
+function getPlayerSnapshot(input) {
+  const playerId = input && input.playerId ? String(input.playerId).trim() : "";
+  const gameState = getGameState();
+  const matches = getMatches({
+    phase: gameState.activePhaseName,
+  });
+  const pickSummary = getPickSummarySafely_(gameState.activePhaseName);
+  const leaderboard = getLeaderboard();
+  const playerPicks = playerId
+    ? getPlayerPicks({
+        playerId,
+        phase: gameState.activePhaseName,
+      })
+    : { playerId: "", phaseName: gameState.activePhaseName, count: 0, picks: [] };
+  const pickHistory = playerId
+    ? getPlayerPickHistory({
+        playerId,
+        phase: "",
+      })
+    : { playerId: "", phaseName: "", count: 0, picks: [] };
+  let profile = { player: null };
+
+  if (playerId) {
+    try {
+      profile = getPlayerProfile({ playerId });
+    } catch (error) {
+      profile = {
+        player: null,
+        error: error.message,
+      };
+    }
+  }
+
+  return {
+    gameState,
+    matches,
+    pickSummary,
+    leaderboard,
+    playerPicks,
+    pickHistory,
+    profile,
+  };
+}
+
+function getAdminSnapshot() {
+  const gameState = getGameState();
+  const matches = getMatches({
+    phase: gameState.activePhaseName,
+  });
+  const pickSummary = getPickSummarySafely_(gameState.activePhaseName);
+  const settlementLog = getSettlementLog({
+    limit: 20,
+  });
+
+  return {
+    gameState,
+    matches,
+    pickSummary,
+    settlementLog,
+    dashboard: {
+      playerCount: gameState.playerCount,
+      activeMatchCount: gameState.activeMatchCount,
+      activePhaseName: gameState.activePhaseName,
+      gameStatus: gameState.gameStatus,
+    },
+  };
+}
+
+function testGetPlayerSnapshot() {
+  const players = getSheetRows_("Players");
+  const result = getPlayerSnapshot({
+    playerId: players[0] ? players[0].player_id : "",
+  });
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function testGetAdminSnapshot() {
+  const result = getAdminSnapshot();
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function getMatchOutcome_(match) {
   const teamAGoals = Number(match.team_a_goals);
   const teamBGoals = Number(match.team_b_goals);
@@ -1025,6 +1123,16 @@ function doGet(e) {
 
     if (action === "getGameState") {
       return jsonResponse_(getGameState());
+    }
+
+    if (action === "getPlayerSnapshot") {
+      return jsonResponse_(getPlayerSnapshot({
+        playerId: e.parameter.playerId,
+      }));
+    }
+
+    if (action === "getAdminSnapshot") {
+      return jsonResponse_(getAdminSnapshot());
     }
 
     if (action === "getMatches") {
