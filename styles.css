@@ -206,6 +206,41 @@ h1 {
   gap: 12px;
 }
 
+.phase-timeline,
+.phase-list,
+.player-roster-list {
+  display: grid;
+  gap: 10px;
+}
+
+.phase-timeline {
+  margin-bottom: 14px;
+}
+
+.phase-pill,
+.phase-row,
+.player-roster-row {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.phase-pill.active,
+.phase-row.active {
+  border-color: var(--green);
+  background: #eef5f1;
+}
+
+.phase-pill span,
+.phase-row span,
+.player-roster-row span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .leaderboard-list {
   display: grid;
   gap: 10px;
@@ -518,6 +553,7 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-bottom: 10px;
 }
 
 .phase-actions button {
@@ -545,6 +581,30 @@ h1 {
 .filter-tabs button.active {
   color: white;
   background: var(--green);
+}
+
+.phase-row,
+.player-roster-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.phase-row button {
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: white;
+  background: var(--green);
+}
+
+.phase-row button:disabled {
+  opacity: 0.58;
+}
+
+.player-roster-row div:last-child {
+  text-align: right;
 }
 
 .admin-match-card {

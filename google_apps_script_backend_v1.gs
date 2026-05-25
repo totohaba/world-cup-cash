@@ -118,6 +118,21 @@ function updateActivePhase_(updates) {
   return phase;
 }
 
+function normalizePhase_(phase, activePhaseName) {
+  return {
+    phaseId: phase.phase_id,
+    phaseName: phase.phase_name,
+    phaseOrder: toNumber_(phase.phase_order, 0),
+    status: phase.status || "future",
+    firstMatchTime: phase.first_match_time,
+    lockTime: phase.lock_time,
+    openedAt: phase.opened_at,
+    lockedAt: phase.locked_at,
+    settledAt: phase.settled_at,
+    isActive: phase.phase_name === activePhaseName,
+  };
+}
+
 function getGameState() {
   const activePhaseName = getSetting_("active_phase");
   const gameStatus = getSetting_("game_status");
@@ -348,6 +363,25 @@ function getMatches(input) {
     count: phaseMatches.length,
     matches: phaseMatches,
   };
+}
+
+function getPhases() {
+  const activePhaseName = getSetting_("active_phase");
+  const phases = getSheetRows_("Phases")
+    .map((phase) => normalizePhase_(phase, activePhaseName))
+    .sort((a, b) => a.phaseOrder - b.phaseOrder);
+
+  return {
+    activePhaseName,
+    count: phases.length,
+    phases,
+  };
+}
+
+function testGetPhases() {
+  const result = getPhases();
+  console.log(JSON.stringify(result, null, 2));
+  return result;
 }
 
 function testGetMatches() {
@@ -782,6 +816,32 @@ function getLeaderboard() {
   };
 }
 
+function getPlayersSummary() {
+  const activePicks = getActivePicks_();
+  const players = getSheetRows_("Players")
+    .map((player) => {
+      const normalized = normalizePlayer_(player, activePicks);
+      return {
+        ...normalized,
+        joinedAt: player.joined_at,
+        lastSeenAt: player.last_seen_at,
+        isAdmin: String(player.is_admin || "").toLowerCase() === "true",
+      };
+    })
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  return {
+    count: players.length,
+    players,
+  };
+}
+
+function testGetPlayersSummary() {
+  const result = getPlayersSummary();
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function testGetLeaderboard() {
   const result = getLeaderboard();
   console.log(JSON.stringify(result, null, 2));
@@ -811,6 +871,7 @@ function getPlayerSnapshot(input) {
   });
   const pickSummary = getPickSummarySafely_(gameState.activePhaseName);
   const leaderboard = getLeaderboard();
+  const phases = getPhases();
   const playerPicks = playerId
     ? getPlayerPicks({
         playerId,
@@ -840,6 +901,7 @@ function getPlayerSnapshot(input) {
     gameState,
     matches,
     pickSummary,
+    phases,
     leaderboard,
     playerPicks,
     pickHistory,
@@ -856,11 +918,15 @@ function getAdminSnapshot() {
   const settlementLog = getSettlementLog({
     limit: 20,
   });
+  const phases = getPhases();
+  const players = getPlayersSummary();
 
   return {
     gameState,
     matches,
     pickSummary,
+    phases,
+    players,
     settlementLog,
     dashboard: {
       playerCount: gameState.playerCount,
@@ -1005,6 +1071,45 @@ function settleMatch(input) {
   };
 }
 
+function settleFinalMatches(input) {
+  const activePhaseName = getSetting_("active_phase");
+  const phaseName = input && input.phase ? String(input.phase).trim() : activePhaseName;
+  const matches = getSheetRows_("Matches");
+  const finalMatches = matches.filter((match) => {
+    return match.phase === phaseName && match.status === "final";
+  });
+  const settled = [];
+  const errors = [];
+
+  finalMatches.forEach((match) => {
+    try {
+      settled.push(settleMatch({
+        matchId: match.match_id,
+      }));
+    } catch (error) {
+      errors.push({
+        matchId: match.match_id,
+        error: error.message,
+      });
+    }
+  });
+
+  return {
+    phaseName,
+    attemptedCount: finalMatches.length,
+    settledCount: settled.length,
+    errorCount: errors.length,
+    settled,
+    errors,
+  };
+}
+
+function testSettleFinalMatches() {
+  const result = settleFinalMatches({});
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function saveMatchResult(input) {
   if (!input || !input.matchId) {
     throw new Error("saveMatchResult requires matchId.");
@@ -1089,6 +1194,62 @@ function openPhase() {
   };
 }
 
+function setActivePhase(input) {
+  if (!input || !input.phaseName) {
+    throw new Error("setActivePhase requires phaseName.");
+  }
+
+  const phaseName = String(input.phaseName).trim();
+  const phases = getSheetRows_("Phases");
+  const phase = phases.find((item) => item.phase_name === phaseName);
+
+  if (!phase) {
+    throw new Error(`Phase not found: ${phaseName}`);
+  }
+
+  setSetting_("active_phase", phaseName);
+  setSetting_("game_status", phase.status || "future");
+
+  return {
+    updated: true,
+    gameStatus: phase.status || "future",
+    activePhase: normalizePhase_(phase, phaseName),
+  };
+}
+
+function openNextPhase() {
+  const activePhaseName = getSetting_("active_phase");
+  const phases = getSheetRows_("Phases")
+    .map((phase, index) => ({ phase, index }))
+    .sort((a, b) => toNumber_(a.phase.phase_order, 0) - toNumber_(b.phase.phase_order, 0));
+  const activeIndex = phases.findIndex((item) => item.phase.phase_name === activePhaseName);
+
+  if (activeIndex < 0) {
+    throw new Error(`Active phase not found: ${activePhaseName}`);
+  }
+
+  const nextItem = phases[activeIndex + 1];
+
+  if (!nextItem) {
+    throw new Error("There is no next phase.");
+  }
+
+  const timestamp = nowIso_();
+  nextItem.phase.status = "open";
+  nextItem.phase.opened_at = timestamp;
+  nextItem.phase.locked_at = "";
+  updateObjectRow_("Phases", nextItem.index + 2, nextItem.phase);
+  setSetting_("active_phase", nextItem.phase.phase_name);
+  setSetting_("game_status", "open");
+  updateAllPlayerDerivedBalances_();
+
+  return {
+    opened: true,
+    gameStatus: "open",
+    activePhase: normalizePhase_(nextItem.phase, nextItem.phase.phase_name),
+  };
+}
+
 function lockPhase() {
   const timestamp = nowIso_();
   const phase = updateActivePhase_({
@@ -1141,6 +1302,10 @@ function doGet(e) {
       }));
     }
 
+    if (action === "getPhases") {
+      return jsonResponse_(getPhases());
+    }
+
     if (action === "joinGame") {
       return jsonResponse_(joinGame({
         deviceId: e.parameter.deviceId,
@@ -1181,6 +1346,10 @@ function doGet(e) {
       return jsonResponse_(getLeaderboard());
     }
 
+    if (action === "getPlayersSummary") {
+      return jsonResponse_(getPlayersSummary());
+    }
+
     if (action === "getSettlementLog") {
       return jsonResponse_(getSettlementLog({
         matchId: e.parameter.matchId,
@@ -1211,8 +1380,24 @@ function doGet(e) {
       }));
     }
 
+    if (action === "settleFinalMatches") {
+      return jsonResponse_(settleFinalMatches({
+        phase: e.parameter.phase,
+      }));
+    }
+
     if (action === "openPhase") {
       return jsonResponse_(openPhase());
+    }
+
+    if (action === "openNextPhase") {
+      return jsonResponse_(openNextPhase());
+    }
+
+    if (action === "setActivePhase") {
+      return jsonResponse_(setActivePhase({
+        phaseName: e.parameter.phaseName,
+      }));
     }
 
     if (action === "lockPhase") {

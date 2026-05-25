@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash Admin</title>
-    <link rel="stylesheet" href="styles.css?v=snapshot-dashboard-2" />
+    <link rel="stylesheet" href="styles.css?v=phase-manager-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -29,8 +29,11 @@
         <div class="phase-actions">
           <button type="button" data-admin-action="openPhase">Open Phase</button>
           <button type="button" data-admin-action="lockPhase">Lock Phase</button>
+          <button type="button" data-admin-action="openNextPhase">Open Next Phase</button>
+          <button type="button" data-settle-final-matches>Settle Final Matches</button>
         </div>
         <p id="phase-action-status" class="admin-match-status" aria-live="polite"></p>
+        <div id="admin-phase-list" class="phase-list"></div>
       </section>
 
       <section class="panel">
@@ -53,7 +56,14 @@
         </div>
         <div id="settlement-log-list" class="settlement-log-list"></div>
       </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Players</h2>
+        </div>
+        <div id="admin-player-list" class="player-roster-list"></div>
+      </section>
     </main>
-    <script src="admin.js?v=snapshot-dashboard-2"></script>
+    <script src="admin.js?v=phase-manager-1"></script>
   </body>
 </html>

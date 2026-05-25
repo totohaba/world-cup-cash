@@ -7,6 +7,8 @@ let activeStatusFilter = "all";
 let activeGameState = null;
 let adminPickSummaryByMatch = {};
 let adminDashboard = null;
+let adminPhases = [];
+let adminPlayers = [];
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -175,6 +177,66 @@ function renderAdminDashboard() {
     .join("");
 }
 
+function renderAdminPhases(phases = adminPhases) {
+  const list = document.querySelector("#admin-phase-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!phases.length) {
+    list.innerHTML = `<p class="empty-state">No phases found.</p>`;
+    return;
+  }
+
+  list.innerHTML = phases
+    .map((phase) => {
+      const activeClass = phase.isActive ? "active" : "";
+      return `
+        <article class="phase-row ${activeClass}">
+          <div>
+            <strong>${phase.phaseName}</strong>
+            <span>${phase.status}${phase.lockTime ? ` - locks ${phase.lockTime}` : ""}</span>
+          </div>
+          <button type="button" data-set-active-phase="${phase.phaseName}" ${phase.isActive ? "disabled" : ""}>
+            ${phase.isActive ? "Active" : "Make Active"}
+          </button>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderAdminPlayers(players = adminPlayers) {
+  const list = document.querySelector("#admin-player-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!players.length) {
+    list.innerHTML = `<p class="empty-state">No players yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = players
+    .map((player) => {
+      return `
+        <article class="player-roster-row">
+          <div>
+            <strong>${player.displayName}</strong>
+            <span>${player.wins}W-${player.losses}L-${player.draws}D - ${player.activePickCount} active picks</span>
+          </div>
+          <div>
+            <strong>${formatAdminMoney(player.currentBalance, { cents: true })}</strong>
+            <span>Pending ${formatAdminMoney(player.pendingBets)} - Available ${formatAdminMoney(player.availableToBet)}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function formatAdminMoney(value, options = {}) {
   const numberValue = Number(value) || 0;
 
@@ -254,10 +316,14 @@ async function loadAdminMatches() {
       adminMatches = result.matches.matches;
       adminPickSummaryByMatch = result.pickSummary?.summaries || {};
       adminDashboard = result.dashboard;
+      adminPhases = result.phases?.phases || [];
+      adminPlayers = result.players?.players || [];
       status.textContent = result.pickSummary?.error
         ? `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
         : `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches`;
       renderAdminDashboard();
+      renderAdminPhases(adminPhases);
+      renderAdminPlayers(adminPlayers);
       renderAdminMatches(adminMatches);
       renderSettlementLog(result.settlementLog?.logs || []);
       return;
@@ -273,10 +339,14 @@ async function loadAdminMatches() {
     adminMatches = matchesResult.matches;
     adminPickSummaryByMatch = summaryResult.summaries;
     adminDashboard = null;
+    adminPhases = [];
+    adminPlayers = [];
     status.textContent = summaryResult.error
       ? `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
       : `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderAdminDashboard();
+    renderAdminPhases(adminPhases);
+    renderAdminPlayers(adminPlayers);
     renderAdminMatches(adminMatches);
     loadSettlementLog();
   } catch (error) {
@@ -302,11 +372,55 @@ async function handleAdminActionClick(event) {
 
   try {
     const result = await callAdminApi(action);
-    actionStatus.textContent = `${result.gameStatus} - ${result.activePhase.phase_name}`;
+    const phaseName = result.activePhase?.phaseName || result.activePhase?.phase_name || activeGameState?.activePhaseName || "";
+    actionStatus.textContent = `${result.gameStatus} - ${phaseName}`;
     await loadAdminMatches();
   } catch (error) {
     console.error(error);
     actionStatus.textContent = `Could not update phase: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function handlePhaseManagerClick(event) {
+  const setActiveButton = event.target.closest("[data-set-active-phase]");
+  const settleFinalButton = event.target.closest("[data-settle-final-matches]");
+
+  if (!setActiveButton && !settleFinalButton) {
+    return;
+  }
+
+  const actionStatus = document.querySelector("#phase-action-status");
+  const button = setActiveButton || settleFinalButton;
+  const originalText = button.textContent;
+
+  if (settleFinalButton && !confirm("Settle every final match in the active phase?")) {
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Working...";
+  actionStatus.textContent = "";
+
+  try {
+    if (setActiveButton) {
+      const result = await callAdminApi("setActivePhase", {
+        phaseName: setActiveButton.dataset.setActivePhase,
+      });
+      actionStatus.textContent = `${result.gameStatus} - ${result.activePhase.phaseName}`;
+    } else {
+      const result = await callAdminApi("settleFinalMatches", {
+        phase: activeGameState?.activePhaseName,
+      });
+      actionStatus.textContent = `Settled ${result.settledCount} of ${result.attemptedCount} final matches`;
+    }
+
+    await loadAdminMatches();
+  } catch (error) {
+    console.error(error);
+    actionStatus.textContent = `Could not complete action: ${error.message}`;
   } finally {
     button.disabled = false;
     button.textContent = originalText;
@@ -374,5 +488,7 @@ document.querySelector("#log-refresh-button")?.addEventListener("click", loadSet
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
 document.querySelector(".filter-tabs")?.addEventListener("click", handleFilterClick);
 document.querySelector(".phase-actions")?.addEventListener("click", handleAdminActionClick);
+document.querySelector(".phase-actions")?.addEventListener("click", handlePhaseManagerClick);
+document.querySelector("#admin-phase-list")?.addEventListener("click", handlePhaseManagerClick);
 
 loadAdminMatches();

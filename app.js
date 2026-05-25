@@ -15,6 +15,7 @@ let activePickHistory = [];
 let activeGameState = null;
 let activePickSummaryByMatch = {};
 let activeMatchFilter = "all";
+let activePhases = [];
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -286,6 +287,33 @@ function renderPlayerSnapshotStats() {
           <span>${label}</span>
           <strong>${value}</strong>
         </div>
+      `;
+    })
+    .join("");
+}
+
+function renderPhaseTimeline(phases = activePhases) {
+  const list = document.querySelector("#phase-timeline");
+
+  if (!list) {
+    return;
+  }
+
+  if (!phases.length) {
+    list.innerHTML = "";
+    return;
+  }
+
+  list.innerHTML = phases
+    .map((phase) => {
+      const activeClass = phase.isActive ? "active" : "";
+      const lockText = phase.lockTime ? `Locks ${phase.lockTime}` : "";
+
+      return `
+        <article class="phase-pill ${activeClass}">
+          <strong>${phase.phaseName}</strong>
+          <span>${phase.status}${lockText ? ` - ${lockText}` : ""}</span>
+        </article>
       `;
     })
     .join("");
@@ -723,6 +751,7 @@ async function loadGameState() {
       activeProfile = result.profile?.player || null;
       activePickHistory = result.pickHistory?.picks || [];
       activeMatches = result.matches?.matches || [];
+      activePhases = result.phases?.phases || [];
 
       phaseName.textContent = result.gameState.activePhaseName;
       status.textContent = result.pickSummary?.error
@@ -733,6 +762,7 @@ async function loadGameState() {
       renderLeaderboard(activeLeaderboard);
       renderProfile(activeProfile);
       renderPickHistory(activePickHistory);
+      renderPhaseTimeline(activePhases);
       renderMatches(activeMatches, activePicksByMatch);
       renderPlayerSnapshotStats();
 
@@ -748,11 +778,13 @@ async function loadGameState() {
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
+    const phasesResult = await callApi("getPhases");
     const summaryResult = await loadPhasePickSummary(gameState.activePhaseName);
     const picksResult = await loadPlayerPickHistory(player, gameState.activePhaseName);
 
     activePickSummaryByMatch = summaryResult.summaries;
     activePicksByMatch = indexPicksByMatch(picksResult.picks);
+    activePhases = phasesResult.phases;
     await loadSummaryData();
 
     phaseName.textContent = gameState.activePhaseName;
@@ -763,6 +795,7 @@ async function loadGameState() {
       : gameState.gameStatus === "locked"
         ? `Phase locked - ${matchesResult.count} matches`
         : `${gameState.gameStatus} - ${matchesResult.count} matches`;
+    renderPhaseTimeline(activePhases);
     renderMatches(matchesResult.matches, activePicksByMatch);
   } catch (error) {
     console.error(error);
