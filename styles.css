@@ -29,7 +29,7 @@ a {
   min-height: 100svh;
   max-width: 480px;
   margin: 0 auto;
-  padding: 20px 16px 88px;
+  padding: 42px 18px 104px;
   background:
     radial-gradient(circle at 20% 0%, rgba(216, 169, 40, 0.2), transparent 32%),
     linear-gradient(180deg, #07583b, #033323);
@@ -73,8 +73,8 @@ h1 {
 }
 
 .balance-card {
-  min-width: 132px;
-  padding: 12px;
+  min-width: 142px;
+  padding: 14px 12px;
   text-align: center;
   color: white;
   background: rgba(0, 0, 0, 0.2);
@@ -82,11 +82,12 @@ h1 {
 
 .player-design-header {
   align-items: flex-start;
+  margin-bottom: 18px;
 }
 
 .app-logo {
   display: block;
-  width: min(56vw, 244px);
+  width: min(58vw, 270px);
   height: auto;
 }
 
@@ -115,16 +116,20 @@ h1 {
 }
 
 .phase-progress-card {
+  margin-top: 0;
+  padding: 18px 18px 14px;
   text-align: center;
 }
 
 .phase-progress-card h2 {
+  margin-bottom: 8px;
   font-family: "Arial Black", Impact, Arial, sans-serif;
   font-size: 24px;
   letter-spacing: 0;
 }
 
 .phase-progress-card p {
+  margin-bottom: 16px;
   color: var(--text);
   font-size: 16px;
 }
@@ -264,29 +269,54 @@ h1 {
 }
 
 .matches-panel {
-  padding: 14px;
+  margin-top: 20px;
+  padding: 24px 18px 22px;
+  background: linear-gradient(180deg, #fffef9, #f5f1e7);
 }
 
 .matches-panel h2 {
   font-family: "Arial Black", Impact, Arial, sans-serif;
+  font-size: 28px;
   text-transform: uppercase;
 }
 
 .featured-match-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr);
-  min-height: 250px;
+  grid-template-columns: minmax(0, 1fr) 160px minmax(0, 1fr);
+  min-height: 300px;
   overflow: hidden;
   border: 2px solid var(--gold);
   border-radius: 8px;
-  padding: 34px 14px 16px;
+  padding: 58px 14px 18px;
   color: white;
   background:
     radial-gradient(circle at 50% 110%, rgba(216, 169, 40, 0.26), transparent 38%),
     linear-gradient(135deg, #06462f, #03291d);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
   cursor: pointer;
+}
+
+.featured-match-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08) 18%, transparent 42%),
+    radial-gradient(circle at 18% 34%, rgba(255, 255, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 82% 34%, rgba(255, 224, 128, 0.2), transparent 32%);
+  pointer-events: none;
+}
+
+.featured-match-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 2;
+  height: 44%;
+  background: linear-gradient(0deg, rgba(3, 41, 29, 0.96), rgba(3, 41, 29, 0.65), transparent);
+  pointer-events: none;
 }
 
 .featured-label {
@@ -302,6 +332,7 @@ h1 {
   font-weight: 800;
   text-align: center;
   text-transform: uppercase;
+  z-index: 6;
 }
 
 .featured-team {
@@ -311,29 +342,33 @@ h1 {
   justify-items: center;
   min-width: 0;
   text-align: center;
+  z-index: 3;
 }
 
 .featured-player {
   position: absolute;
-  bottom: -18px;
-  width: 138px;
+  bottom: -28px;
+  width: 190px;
   max-width: 150%;
   opacity: 0.9;
+  filter: saturate(1.06) contrast(1.03);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 54%, rgba(0, 0, 0, 0.78) 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 54%, rgba(0, 0, 0, 0.78) 72%, transparent 100%);
 }
 
 .featured-left .featured-player {
-  left: -34px;
+  left: -54px;
 }
 
 .featured-right .featured-player {
-  right: -34px;
+  right: -54px;
 }
 
 .featured-flag {
   position: relative;
-  z-index: 1;
-  width: 76px;
-  height: 50px;
+  z-index: 5;
+  width: 86px;
+  height: 58px;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 8px;
   object-fit: cover;
@@ -342,7 +377,7 @@ h1 {
 
 .featured-team strong {
   position: relative;
-  z-index: 1;
+  z-index: 5;
   margin-top: 8px;
   font-family: "Arial Black", Impact, Arial, sans-serif;
   font-size: 18px;
@@ -351,7 +386,7 @@ h1 {
 
 .featured-center {
   position: relative;
-  z-index: 1;
+  z-index: 5;
   display: grid;
   align-content: center;
   justify-items: center;
@@ -361,7 +396,7 @@ h1 {
 
 .featured-center strong {
   font-family: "Arial Black", Impact, Arial, sans-serif;
-  font-size: 34px;
+  font-size: 42px;
 }
 
 .featured-center button,
@@ -387,13 +422,13 @@ h1 {
 
 .match-row-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 124px minmax(0, 1fr) 132px;
+  gap: 12px;
   align-items: center;
   position: relative;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  padding: 16px;
   background: rgba(255, 255, 255, 0.86);
   cursor: pointer;
 }
@@ -435,9 +470,8 @@ h1 {
 }
 
 .match-row-card button {
-  grid-column: 1 / -1;
   justify-self: center;
-  min-width: 150px;
+  min-width: 116px;
   color: var(--green);
   background: white;
   border-color: var(--green);
@@ -445,8 +479,9 @@ h1 {
 
 .match-row-card .match-list-status {
   position: static;
-  grid-column: 1 / -1;
+  grid-column: 4;
   color: var(--muted);
+  text-align: center;
 }
 
 .phase-timeline,
@@ -461,13 +496,13 @@ h1 {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 0;
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
 .phase-timeline::before {
   content: "";
   position: absolute;
-  top: 17px;
+  top: 14px;
   right: 8%;
   left: 8%;
   height: 2px;
@@ -485,7 +520,7 @@ h1 {
 
 .phase-pill {
   display: grid;
-  min-height: 50px;
+  min-height: 42px;
   align-content: start;
   justify-items: center;
   gap: 5px;
@@ -506,23 +541,23 @@ h1 {
   position: relative;
   z-index: 1;
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border: 2px solid #c9c9c9;
   border-radius: 999px;
   background: var(--cream);
 }
 
 .phase-pill.active .phase-dot {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border: 8px solid #15914c;
   background: white;
 }
 
 .phase-pill strong {
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .phase-pill span,
@@ -868,8 +903,8 @@ h1 {
 }
 
 .team-flag {
-  width: 52px;
-  height: 34px;
+  width: 72px;
+  height: 48px;
   border: 1px solid var(--line);
   border-radius: 6px;
   object-fit: cover;
@@ -1484,45 +1519,103 @@ h1 {
   }
 
   .app-shell {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding: 20px 10px 88px;
   }
 
   .app-logo {
-    width: 210px;
+    width: 178px;
   }
 
   .balance-card {
-    min-width: 118px;
-    padding: 10px;
+    min-width: 96px;
+    padding: 8px;
+  }
+
+  .balance-card span {
+    font-size: 9px;
+  }
+
+  .balance-card strong {
+    font-size: 18px;
   }
 
   .featured-match-card {
-    grid-template-columns: minmax(0, 1fr) 112px minmax(0, 1fr);
-    min-height: 236px;
+    grid-template-columns: minmax(0, 1fr) 94px minmax(0, 1fr);
+    min-height: 210px;
+    padding-top: 42px;
     padding-right: 10px;
     padding-left: 10px;
   }
 
   .featured-player {
-    width: 118px;
+    width: 126px;
   }
 
   .featured-flag {
-    width: 62px;
-    height: 42px;
+    width: 58px;
+    height: 38px;
   }
 
   .featured-team strong {
-    font-size: 15px;
+    font-size: 12px;
+  }
+
+  .featured-center strong {
+    font-size: 28px;
+  }
+
+  .featured-label {
+    min-width: 150px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 
   .featured-center button {
-    padding: 9px 12px;
+    padding: 8px 10px;
+    font-size: 12px;
   }
 
   .match-row-card {
-    grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .match-row-card button,
+  .match-row-card .match-list-status {
+    grid-column: 1 / -1;
+  }
+
+  .team-flag {
+    width: 46px;
+    height: 31px;
+  }
+
+  .phase-progress-card {
+    padding: 14px 12px 10px;
+  }
+
+  .phase-progress-card h2 {
+    font-size: 17px;
+  }
+
+  .phase-progress-card p {
+    font-size: 13px;
+  }
+
+  .phase-pill strong {
+    font-size: 9px;
+  }
+
+  .phase-dot {
+    width: 13px;
+    height: 13px;
+  }
+
+  .phase-pill.active .phase-dot {
+    width: 24px;
+    height: 24px;
+    border-width: 7px;
   }
 
   .detail-teams-grid {
