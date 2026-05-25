@@ -215,6 +215,25 @@ function getPayoutText(match, selectedTeam, totalBetAmount) {
   return `Potential Payout ${formatMoney(totalBetAmount * odds, { cents: true })}`;
 }
 
+function getImpliedProbability(odds) {
+  const numberValue = Number(odds);
+
+  if (!numberValue) {
+    return 0;
+  }
+
+  return 100 / numberValue;
+}
+
+function getProbabilityText(match) {
+  const teamAProbability = getImpliedProbability(match.teamADecimalOdds);
+  const teamBProbability = getImpliedProbability(match.teamBDecimalOdds);
+  const drawProbability = getImpliedProbability(match.drawDecimalOdds);
+  const drawText = drawProbability ? ` - Draw ${drawProbability.toFixed(0)}%` : "";
+
+  return `${match.teamA.team} ${teamAProbability.toFixed(0)}% - ${match.teamB.team} ${teamBProbability.toFixed(0)}%${drawText}`;
+}
+
 function getSelectionCount(summary, teamSlug) {
   return summary?.selections?.[teamSlug] || 0;
 }
@@ -321,9 +340,31 @@ function renderPhaseTimeline(phases = activePhases) {
 
 function renderLeaderboard(players = activeLeaderboard) {
   const list = document.querySelector("#leaderboard-list");
+  const summary = document.querySelector("#leaderboard-summary");
 
   if (!list) {
     return;
+  }
+
+  if (summary) {
+    const leader = players[0];
+    const totalPotential = players.reduce((total, player) => total + (Number(player.potentialPayout) || 0), 0);
+    const totalActivePicks = players.reduce((total, player) => total + (Number(player.activePickCount) || 0), 0);
+    summary.innerHTML = [
+      ["Leader", leader ? leader.displayName : "--"],
+      ["Players", players.length],
+      ["Active Picks", totalActivePicks],
+      ["Potential", formatMoney(totalPotential, { cents: true })],
+    ]
+      .map(([label, value]) => {
+        return `
+          <div class="mini-stat">
+            <span>${label}</span>
+            <strong>${value}</strong>
+          </div>
+        `;
+      })
+      .join("");
   }
 
   if (!players.length) {
@@ -339,10 +380,12 @@ function renderLeaderboard(players = activeLeaderboard) {
           <div>
             <strong>${player.displayName}</strong>
             <span>${player.wins}W-${player.losses}L-${player.draws}D - ${player.activePickCount} picks</span>
+            <span>Pending ${formatMoney(player.pendingBets)} - Available ${formatMoney(player.availableToBet)}</span>
           </div>
           <div class="leaderboard-money">
             <strong>${formatMoney(player.currentBalance)}</strong>
             <span>Potential ${formatMoney(player.potentialPayout, { cents: true })}</span>
+            <span>Net ${formatMoney((Number(player.totalWinnings) || 0) - (Number(player.totalLosses) || 0), { cents: true })}</span>
           </div>
         </article>
       `;
@@ -505,6 +548,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
       const pickSummary = activePickSummaryByMatch[match.matchId];
       const activityText = getPickActivityText(match, pickSummary);
       const moneyText = getPickMoneyText(pickSummary);
+      const probabilityText = getProbabilityText(match);
 
       return `
         <article class="match-card" data-match-id="${match.matchId}">
@@ -533,6 +577,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
           <div class="pick-activity">
             <strong>${activityText}</strong>
             ${moneyText ? `<span>${moneyText}</span>` : ""}
+            <span>${probabilityText}</span>
           </div>
           <div class="bet-control">
             <label for="bet-${match.matchId}">Total Bet</label>

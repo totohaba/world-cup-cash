@@ -197,6 +197,25 @@ function updateObjectRow_(sheetName, rowNumber, item) {
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
 }
 
+function csvEscape_(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  return text;
+}
+
+function sheetToCsv_(sheetName) {
+  const sheet = getSheet_(sheetName);
+  const values = sheet.getDataRange().getValues();
+
+  return values
+    .map((row) => row.map(csvEscape_).join(","))
+    .join("\n");
+}
+
 function updateAllPlayerDerivedBalances_() {
   const players = getSheetRows_("Players");
   const activePicks = getActivePicks_();
@@ -937,6 +956,32 @@ function getAdminSnapshot() {
   };
 }
 
+function getCsvExport() {
+  const timestamp = nowIso_();
+  const sheets = ["Settings", "Phases", "Teams", "Matches", "Players", "Picks", "SettlementLog"];
+  const files = sheets.map((sheetName) => ({
+    sheetName,
+    fileName: `world-cup-cash-${sheetName.toLowerCase()}-${timestamp.slice(0, 10)}.csv`,
+    csv: sheetToCsv_(sheetName),
+  }));
+
+  return {
+    exportedAt: timestamp,
+    count: files.length,
+    files,
+  };
+}
+
+function testGetCsvExport() {
+  const result = getCsvExport();
+  console.log(JSON.stringify({
+    exportedAt: result.exportedAt,
+    count: result.count,
+    firstFile: result.files[0].fileName,
+  }, null, 2));
+  return result;
+}
+
 function testGetPlayerSnapshot() {
   const players = getSheetRows_("Players");
   const result = getPlayerSnapshot({
@@ -1294,6 +1339,10 @@ function doGet(e) {
 
     if (action === "getAdminSnapshot") {
       return jsonResponse_(getAdminSnapshot());
+    }
+
+    if (action === "getCsvExport") {
+      return jsonResponse_(getCsvExport());
     }
 
     if (action === "getMatches") {

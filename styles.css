@@ -248,7 +248,7 @@ h1 {
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
@@ -287,6 +287,10 @@ h1 {
 .leaderboard-money strong {
   display: block;
   color: var(--green);
+}
+
+.leaderboard-money span {
+  white-space: nowrap;
 }
 
 .stat-grid {

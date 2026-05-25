@@ -248,6 +248,19 @@ function formatAdminMoney(value, options = {}) {
   });
 }
 
+function downloadTextFile(fileName, text, mimeType = "text/csv") {
+  const blob = new Blob([text], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function renderSettlementLog(logs) {
   const list = document.querySelector("#settlement-log-list");
 
@@ -355,6 +368,32 @@ async function loadAdminMatches() {
   }
 }
 
+async function handleExportClick() {
+  const button = document.querySelector("#export-all-button");
+  const status = document.querySelector("#export-status");
+  const originalText = button.textContent;
+
+  button.disabled = true;
+  button.textContent = "Exporting...";
+  status.textContent = "";
+
+  try {
+    const result = await callAdminApi("getCsvExport");
+
+    result.files.forEach((file) => {
+      downloadTextFile(file.fileName, file.csv);
+    });
+
+    status.textContent = `Downloaded ${result.count} CSV files from ${result.exportedAt}`;
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Could not export CSV files: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 async function handleAdminActionClick(event) {
   const button = event.target.closest("[data-admin-action]");
 
@@ -414,7 +453,9 @@ async function handlePhaseManagerClick(event) {
       const result = await callAdminApi("settleFinalMatches", {
         phase: activeGameState?.activePhaseName,
       });
-      actionStatus.textContent = `Settled ${result.settledCount} of ${result.attemptedCount} final matches`;
+      actionStatus.textContent = result.errorCount
+        ? `Settled ${result.settledCount} of ${result.attemptedCount}; ${result.errorCount} failed`
+        : `Settled ${result.settledCount} of ${result.attemptedCount} final matches`;
     }
 
     await loadAdminMatches();
@@ -485,6 +526,7 @@ function handleFilterClick(event) {
 
 document.querySelector("#admin-refresh-button")?.addEventListener("click", loadAdminMatches);
 document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
+document.querySelector("#export-all-button")?.addEventListener("click", handleExportClick);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
 document.querySelector(".filter-tabs")?.addEventListener("click", handleFilterClick);
 document.querySelector(".phase-actions")?.addEventListener("click", handleAdminActionClick);
