@@ -4,6 +4,7 @@ const ADMIN_CONFIG = {
 
 let adminMatches = [];
 let activeStatusFilter = "all";
+let activeGameState = null;
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -158,13 +159,42 @@ async function loadAdminMatches() {
       phase: gameState.activePhaseName,
     });
 
+    activeGameState = gameState;
     adminMatches = matchesResult.matches;
-    status.textContent = `${gameState.activePhaseName} - ${matchesResult.count} matches`;
+    status.textContent = `${gameState.activePhaseName} - ${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderAdminMatches(adminMatches);
     loadSettlementLog();
   } catch (error) {
     console.error(error);
     status.textContent = `Could not load admin data: ${error.message}`;
+  }
+}
+
+async function handleAdminActionClick(event) {
+  const button = event.target.closest("[data-admin-action]");
+
+  if (!button) {
+    return;
+  }
+
+  const actionStatus = document.querySelector("#phase-action-status");
+  const action = button.dataset.adminAction;
+  const originalText = button.textContent;
+
+  button.disabled = true;
+  button.textContent = "Working...";
+  actionStatus.textContent = "";
+
+  try {
+    const result = await callAdminApi(action);
+    actionStatus.textContent = `${result.gameStatus} - ${result.activePhase.phase_name}`;
+    await loadAdminMatches();
+  } catch (error) {
+    console.error(error);
+    actionStatus.textContent = `Could not update phase: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
   }
 }
 
@@ -220,5 +250,6 @@ document.querySelector("#admin-refresh-button")?.addEventListener("click", loadA
 document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
 document.querySelector(".filter-tabs")?.addEventListener("click", handleFilterClick);
+document.querySelector(".phase-actions")?.addEventListener("click", handleAdminActionClick);
 
 loadAdminMatches();

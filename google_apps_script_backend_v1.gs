@@ -88,6 +88,36 @@ function getSetting_(key) {
   return row ? row.value : null;
 }
 
+function setSetting_(key, value) {
+  const settings = getSheetRows_("Settings");
+  const settingIndex = settings.findIndex((item) => item.key === key);
+
+  if (settingIndex < 0) {
+    throw new Error(`Missing setting: ${key}`);
+  }
+
+  settings[settingIndex].value = value;
+  updateObjectRow_("Settings", settingIndex + 2, settings[settingIndex]);
+}
+
+function updateActivePhase_(updates) {
+  const activePhaseName = getSetting_("active_phase");
+  const phases = getSheetRows_("Phases");
+  const phaseIndex = phases.findIndex((phase) => phase.phase_name === activePhaseName);
+
+  if (phaseIndex < 0) {
+    throw new Error(`Active phase not found: ${activePhaseName}`);
+  }
+
+  const phase = {
+    ...phases[phaseIndex],
+    ...updates,
+  };
+
+  updateObjectRow_("Phases", phaseIndex + 2, phase);
+  return phase;
+}
+
 function getGameState() {
   const activePhaseName = getSetting_("active_phase");
   const gameStatus = getSetting_("game_status");
@@ -355,9 +385,15 @@ function savePick(input) {
   const matchId = String(input.matchId).trim();
   const selectedTeam = String(input.selectedTeam).trim();
   const houseBetAmount = Number(getSetting_("house_bet_amount")) || 1;
+  const gameStatus = String(getSetting_("game_status") || "").trim();
+  const activePhaseName = getSetting_("active_phase");
   const totalBetAmount = Math.max(houseBetAmount, toWholeDollar_(input.totalBetAmount, houseBetAmount));
   const playerCashStake = Math.max(0, totalBetAmount - houseBetAmount);
   const timestamp = nowIso_();
+
+  if (gameStatus === "locked" || gameStatus === "settling" || gameStatus === "complete") {
+    throw new Error(`Picks are not allowed while game status is ${gameStatus}.`);
+  }
 
   const players = getSheetRows_("Players");
   const player = players.find((item) => item.player_id === playerId);
@@ -371,6 +407,10 @@ function savePick(input) {
 
   if (!match) {
     throw new Error("Match not found.");
+  }
+
+  if (match.phase !== activePhaseName) {
+    throw new Error("Picks are only allowed for the active phase.");
   }
 
   const matchStatus = String(match.status || "future").trim();
@@ -864,6 +904,51 @@ function testSettleMatch() {
   return result;
 }
 
+function openPhase() {
+  const timestamp = nowIso_();
+  const phase = updateActivePhase_({
+    status: "open",
+    opened_at: timestamp,
+    locked_at: "",
+  });
+
+  setSetting_("game_status", "open");
+
+  return {
+    opened: true,
+    gameStatus: "open",
+    activePhase: phase,
+  };
+}
+
+function lockPhase() {
+  const timestamp = nowIso_();
+  const phase = updateActivePhase_({
+    status: "locked",
+    locked_at: timestamp,
+  });
+
+  setSetting_("game_status", "locked");
+
+  return {
+    locked: true,
+    gameStatus: "locked",
+    activePhase: phase,
+  };
+}
+
+function testOpenPhase() {
+  const result = openPhase();
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function testLockPhase() {
+  const result = lockPhase();
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function doGet(e) {
   try {
     const action = e.parameter.action;
@@ -940,6 +1025,14 @@ function doGet(e) {
       return jsonResponse_(settleMatch({
         matchId: e.parameter.matchId,
       }));
+    }
+
+    if (action === "openPhase") {
+      return jsonResponse_(openPhase());
+    }
+
+    if (action === "lockPhase") {
+      return jsonResponse_(lockPhase());
     }
 
     return jsonResponse_({

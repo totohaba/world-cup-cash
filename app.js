@@ -12,6 +12,7 @@ let activePicksByMatch = {};
 let activeLeaderboard = [];
 let activeProfile = null;
 let activePickHistory = [];
+let activeGameState = null;
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -327,6 +328,7 @@ function showView(viewName) {
 function renderMatches(matches, picksByMatch = activePicksByMatch) {
   const list = document.querySelector("#matches-list");
   const player = getSavedPlayer();
+  const gameLocked = activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
 
   if (!list) {
     return;
@@ -337,7 +339,8 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
   list.innerHTML = matches
     .map((match) => {
       const matchComplete = match.status === "final" || match.status === "settled";
-      const pickDisabled = player && !matchComplete ? "" : "disabled";
+      const readOnly = matchComplete || gameLocked;
+      const pickDisabled = player && !readOnly ? "" : "disabled";
       const savedPick = picksByMatch[match.matchId];
       const teamASelected = savedPick?.selectedTeam === match.teamASlug ? "selected" : "";
       const teamBSelected = savedPick?.selectedTeam === match.teamBSlug ? "selected" : "";
@@ -387,7 +390,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
               step="1"
               value="${totalBetAmount}"
               data-bet-amount
-              ${matchComplete ? "disabled" : ""}
+              ${readOnly ? "disabled" : ""}
             />
             <span>Max ${formatMoney(maxTotalBet)}</span>
           </div>
@@ -564,6 +567,7 @@ async function loadGameState() {
     status.textContent = "Loading live game data...";
 
     const gameState = await callApi("getGameState");
+    activeGameState = gameState;
     const player = getSavedPlayer();
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
@@ -576,7 +580,9 @@ async function loadGameState() {
     phaseName.textContent = gameState.activePhaseName;
     status.textContent = picksResult.error
       ? `${gameState.gameStatus} - ${matchesResult.count} matches - saved picks unavailable: ${picksResult.error.message}`
-      : `${gameState.gameStatus} - ${matchesResult.count} matches`;
+      : gameState.gameStatus === "locked"
+        ? `Phase locked - ${matchesResult.count} matches`
+        : `${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderMatches(matchesResult.matches, activePicksByMatch);
   } catch (error) {
     console.error(error);

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash Admin</title>
-    <link rel="stylesheet" href="styles.css?v=post-settlement-2" />
+    <link rel="stylesheet" href="styles.css?v=phase-controls-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -19,6 +19,17 @@
       <section class="phase-card">
         <h2>Admin Console</h2>
         <p id="admin-status">Loading matches...</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Phase Controls</h2>
+        </div>
+        <div class="phase-actions">
+          <button type="button" data-admin-action="openPhase">Open Phase</button>
+          <button type="button" data-admin-action="lockPhase">Lock Phase</button>
+        </div>
+        <p id="phase-action-status" class="admin-match-status" aria-live="polite"></p>
       </section>
 
       <section class="panel">
@@ -42,6 +53,6 @@
         <div id="settlement-log-list" class="settlement-log-list"></div>
       </section>
     </main>
-    <script src="admin.js?v=post-settlement-2"></script>
+    <script src="admin.js?v=phase-controls-1"></script>
   </body>
 </html>
