@@ -131,6 +131,7 @@ function renderAdminMatches(matches) {
             </label>
           </div>
           <div class="admin-match-actions">
+            <button type="button" data-random-score ${settled ? "disabled" : ""}>Random Score</button>
             <button type="button" data-save-score ${settled ? "disabled" : ""}>Save Score</button>
             <button type="button" data-settle-match ${settled ? "disabled" : ""}>
               ${settled ? "Settled" : "Save and Settle"}
@@ -235,6 +236,33 @@ function renderAdminPlayers(players = adminPlayers) {
       `;
     })
     .join("");
+}
+
+function renderHealthCheck(result) {
+  const list = document.querySelector("#health-check-results");
+
+  if (!list) {
+    return;
+  }
+
+  const missingSheets = result.sheetStatus.filter((sheet) => !sheet.found);
+  const active = result.activePhase;
+
+  list.innerHTML = `
+    <div class="health-summary ${result.ok ? "ok" : "bad"}">
+      <strong>${result.ok ? "Healthy" : "Needs attention"}</strong>
+      <span>${result.checkedAt}</span>
+    </div>
+    <div class="mini-stat-row">
+      <div class="mini-stat"><span>Active Picks</span><strong>${active.activePickCount}</strong></div>
+      <div class="mini-stat"><span>Missing Scores</span><strong>${active.missingScoreCount}</strong></div>
+      <div class="mini-stat"><span>Final Unsettled</span><strong>${active.finalUnsettledCount}</strong></div>
+      <div class="mini-stat"><span>Settled</span><strong>${active.settledCount}</strong></div>
+    </div>
+    <p class="admin-match-status">
+      ${missingSheets.length ? `Missing sheets: ${missingSheets.map((sheet) => sheet.sheetName).join(", ")}` : "All required sheets found."}
+    </p>
+  `;
 }
 
 function formatAdminMoney(value, options = {}) {
@@ -394,6 +422,66 @@ async function handleExportClick() {
   }
 }
 
+async function handleHealthCheckClick() {
+  const button = document.querySelector("#health-check-button");
+  const status = document.querySelector("#test-tool-status");
+  const originalText = button.textContent;
+
+  button.disabled = true;
+  button.textContent = "Checking...";
+  status.textContent = "";
+
+  try {
+    const result = await callAdminApi("getHealthCheck");
+    renderHealthCheck(result);
+    status.textContent = "Health check complete";
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Health check failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function handleSimulationClick(event) {
+  const button = event.target.closest("#simulate-scores-button, #simulate-settle-button");
+
+  if (!button) {
+    return;
+  }
+
+  const shouldSettle = button.id === "simulate-settle-button";
+  const status = document.querySelector("#test-tool-status");
+  const originalText = button.textContent;
+
+  if (shouldSettle && !confirm("Simulate scores and settle every unsettled active-phase match?")) {
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Working...";
+  status.textContent = "";
+
+  try {
+    const result = await callAdminApi("simulatePhaseResults", {
+      phase: activeGameState?.activePhaseName,
+      settle: shouldSettle ? "true" : "false",
+    });
+
+    status.textContent = shouldSettle
+      ? `Simulated and settled ${result.simulatedCount} of ${result.attemptedCount} matches`
+      : `Simulated scores for ${result.simulatedCount} of ${result.attemptedCount} matches`;
+    await loadAdminMatches();
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Simulation failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 async function handleAdminActionClick(event) {
   const button = event.target.closest("[data-admin-action]");
 
@@ -469,13 +557,14 @@ async function handlePhaseManagerClick(event) {
 }
 
 async function handleSettleClick(event) {
-  const button = event.target.closest("[data-settle-match], [data-save-score]");
+  const button = event.target.closest("[data-settle-match], [data-save-score], [data-random-score]");
 
   if (!button) {
     return;
   }
 
   const shouldSettle = button.hasAttribute("data-settle-match");
+  const shouldRandomize = button.hasAttribute("data-random-score");
   const card = button.closest("[data-match-id]");
   const status = card.querySelector(".admin-match-status");
   const matchId = card.dataset.matchId;
@@ -487,23 +576,35 @@ async function handleSettleClick(event) {
   }
 
   button.disabled = true;
-  status.textContent = shouldSettle ? "Saving result and settling picks..." : "Saving score...";
+  status.textContent = shouldRandomize
+    ? "Simulating score..."
+    : shouldSettle
+      ? "Saving result and settling picks..."
+      : "Saving score...";
 
   try {
-    const result = await callAdminApi("saveMatchResult", {
-      matchId,
-      teamAGoals,
-      teamBGoals,
-      settle: shouldSettle ? "true" : "false",
-    });
+    const result = shouldRandomize
+      ? await callAdminApi("simulateMatchResult", {
+          matchId,
+        })
+      : await callAdminApi("saveMatchResult", {
+          matchId,
+          teamAGoals,
+          teamBGoals,
+          settle: shouldSettle ? "true" : "false",
+        });
 
     status.textContent = shouldSettle
       ? `Settled ${result.settledPickCount} picks`
-      : "Score saved";
+      : shouldRandomize
+        ? "Random score saved"
+        : "Score saved";
     await loadAdminMatches();
   } catch (error) {
     console.error(error);
-    status.textContent = shouldSettle
+    status.textContent = shouldRandomize
+      ? `Could not simulate score: ${error.message}`
+      : shouldSettle
       ? `Could not settle: ${error.message}`
       : `Could not save score: ${error.message}`;
     button.disabled = false;
@@ -527,6 +628,9 @@ function handleFilterClick(event) {
 document.querySelector("#admin-refresh-button")?.addEventListener("click", loadAdminMatches);
 document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
 document.querySelector("#export-all-button")?.addEventListener("click", handleExportClick);
+document.querySelector("#health-check-button")?.addEventListener("click", handleHealthCheckClick);
+document.querySelector("#simulate-scores-button")?.addEventListener("click", handleSimulationClick);
+document.querySelector("#simulate-settle-button")?.addEventListener("click", handleSimulationClick);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
 document.querySelector(".filter-tabs")?.addEventListener("click", handleFilterClick);
 document.querySelector(".phase-actions")?.addEventListener("click", handleAdminActionClick);

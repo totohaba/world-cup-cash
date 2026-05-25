@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash Admin</title>
-    <link rel="stylesheet" href="styles.css?v=power-tools-2" />
+    <link rel="stylesheet" href="styles.css?v=test-accelerators-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -34,6 +34,19 @@
         </div>
         <p id="phase-action-status" class="admin-match-status" aria-live="polite"></p>
         <div id="admin-phase-list" class="phase-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Test Accelerators</h2>
+        </div>
+        <div class="admin-tool-grid">
+          <button id="health-check-button" type="button">Run Health Check</button>
+          <button id="simulate-scores-button" type="button">Simulate Scores</button>
+          <button id="simulate-settle-button" type="button">Simulate and Settle</button>
+        </div>
+        <div id="health-check-results" class="health-check-results"></div>
+        <p id="test-tool-status" class="admin-match-status" aria-live="polite"></p>
       </section>
 
       <section class="panel">
@@ -72,6 +85,6 @@
         <div id="admin-player-list" class="player-roster-list"></div>
       </section>
     </main>
-    <script src="admin.js?v=power-tools-2"></script>
+    <script src="admin.js?v=test-accelerators-1"></script>
   </body>
 </html>

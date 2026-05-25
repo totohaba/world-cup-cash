@@ -560,6 +560,53 @@ h1 {
   margin-bottom: 10px;
 }
 
+.admin-tool-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.admin-tool-grid button {
+  border: 0;
+  border-radius: 8px;
+  padding: 12px;
+  color: white;
+  background: var(--green);
+  font-weight: 700;
+}
+
+.admin-tool-grid button:disabled {
+  opacity: 0.58;
+}
+
+.health-check-results {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.health-summary {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.health-summary.ok {
+  border-color: #0a7f43;
+}
+
+.health-summary.bad {
+  border-color: #a3332d;
+}
+
+.health-summary span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .phase-actions button {
   border: 0;
   border-radius: 8px;
@@ -650,7 +697,7 @@ h1 {
 
 .admin-match-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 

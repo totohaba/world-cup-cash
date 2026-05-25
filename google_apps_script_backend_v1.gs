@@ -237,6 +237,10 @@ function nowIso_() {
   return new Date().toISOString();
 }
 
+function randomInt_(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 function getStartingBalance_() {
   const value = Number(getSetting_("starting_balance"));
   return Number.isFinite(value) ? value : 200;
@@ -972,6 +976,50 @@ function getCsvExport() {
   };
 }
 
+function getHealthCheck() {
+  const requiredSheets = ["Settings", "Phases", "Teams", "Matches", "Players", "Picks", "SettlementLog"];
+  const sheetStatus = requiredSheets.map((sheetName) => {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+
+    return {
+      sheetName,
+      found: Boolean(sheet),
+      rows: sheet ? sheet.getLastRow() : 0,
+      columns: sheet ? sheet.getLastColumn() : 0,
+    };
+  });
+  const gameState = getGameState();
+  const matches = getSheetRows_("Matches");
+  const picks = getSheetRows_("Picks");
+  const activePhaseMatches = matches.filter((match) => match.phase === gameState.activePhaseName);
+  const finalUnsettledCount = activePhaseMatches.filter((match) => match.status === "final").length;
+  const settledCount = activePhaseMatches.filter((match) => match.status === "settled").length;
+  const missingScoreCount = activePhaseMatches.filter((match) => {
+    return match.team_a_goals === "" || match.team_b_goals === "";
+  }).length;
+  const activePickCount = picks.filter((pick) => pick.status === "active").length;
+
+  return {
+    checkedAt: nowIso_(),
+    ok: sheetStatus.every((sheet) => sheet.found),
+    gameState,
+    sheetStatus,
+    activePhase: {
+      matchCount: activePhaseMatches.length,
+      missingScoreCount,
+      finalUnsettledCount,
+      settledCount,
+      activePickCount,
+    },
+  };
+}
+
+function testGetHealthCheck() {
+  const result = getHealthCheck();
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function testGetCsvExport() {
   const result = getCsvExport();
   console.log(JSON.stringify({
@@ -1147,6 +1195,96 @@ function settleFinalMatches(input) {
     settled,
     errors,
   };
+}
+
+function getRandomScoreForMatch_(match) {
+  let teamAGoals = randomInt_(0, 4);
+  let teamBGoals = randomInt_(0, 4);
+
+  if (String(match.phase || "").toLowerCase().indexOf("group") < 0 && teamAGoals === teamBGoals) {
+    teamAGoals += 1;
+  }
+
+  return {
+    teamAGoals,
+    teamBGoals,
+  };
+}
+
+function simulateMatchResult(input) {
+  if (!input || !input.matchId) {
+    throw new Error("simulateMatchResult requires matchId.");
+  }
+
+  const matchId = String(input.matchId).trim();
+  const matches = getSheetRows_("Matches");
+  const match = matches.find((item) => item.match_id === matchId);
+
+  if (!match) {
+    throw new Error("Match not found.");
+  }
+
+  if (match.status === "settled") {
+    throw new Error("Match is already settled.");
+  }
+
+  const score = getRandomScoreForMatch_(match);
+  const teamAdvanced = score.teamAGoals > score.teamBGoals
+    ? match.team_a
+    : score.teamBGoals > score.teamAGoals
+      ? match.team_b
+      : "";
+
+  return saveMatchResult({
+    matchId,
+    teamAGoals: score.teamAGoals,
+    teamBGoals: score.teamBGoals,
+    teamAdvanced,
+    settle: String(input.settle || "") === "true" ? "true" : "false",
+  });
+}
+
+function simulatePhaseResults(input) {
+  const activePhaseName = getSetting_("active_phase");
+  const phaseName = input && input.phase ? String(input.phase).trim() : activePhaseName;
+  const settle = String(input && input.settle || "") === "true";
+  const matches = getSheetRows_("Matches").filter((match) => {
+    return match.phase === phaseName && match.status !== "settled";
+  });
+  const simulated = [];
+  const errors = [];
+
+  matches.forEach((match) => {
+    try {
+      simulated.push(simulateMatchResult({
+        matchId: match.match_id,
+        settle: settle ? "true" : "false",
+      }));
+    } catch (error) {
+      errors.push({
+        matchId: match.match_id,
+        error: error.message,
+      });
+    }
+  });
+
+  return {
+    phaseName,
+    settle,
+    attemptedCount: matches.length,
+    simulatedCount: simulated.length,
+    errorCount: errors.length,
+    simulated,
+    errors,
+  };
+}
+
+function testSimulatePhaseResults() {
+  const result = simulatePhaseResults({
+    settle: "false",
+  });
+  console.log(JSON.stringify(result, null, 2));
+  return result;
 }
 
 function testSettleFinalMatches() {
@@ -1345,6 +1483,10 @@ function doGet(e) {
       return jsonResponse_(getCsvExport());
     }
 
+    if (action === "getHealthCheck") {
+      return jsonResponse_(getHealthCheck());
+    }
+
     if (action === "getMatches") {
       return jsonResponse_(getMatches({
         phase: e.parameter.phase,
@@ -1419,6 +1561,20 @@ function doGet(e) {
         teamAGoals: e.parameter.teamAGoals,
         teamBGoals: e.parameter.teamBGoals,
         teamAdvanced: e.parameter.teamAdvanced,
+        settle: e.parameter.settle,
+      }));
+    }
+
+    if (action === "simulateMatchResult") {
+      return jsonResponse_(simulateMatchResult({
+        matchId: e.parameter.matchId,
+        settle: e.parameter.settle,
+      }));
+    }
+
+    if (action === "simulatePhaseResults") {
+      return jsonResponse_(simulatePhaseResults({
+        phase: e.parameter.phase,
         settle: e.parameter.settle,
       }));
     }
