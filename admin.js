@@ -2,6 +2,10 @@ const ADMIN_CONFIG = {
   appsScriptUrl: "https://script.google.com/macros/s/AKfycbw3n1ZauqnUKCJOJirwGuLbA9bxqt0PI9rddB-Pgxbac8hTUhNBokw5O97dqVW7dTV2vw/exec",
 };
 
+const ADMIN_STORAGE_KEYS = {
+  snapshot: "worldCupCashAdminSnapshot",
+};
+
 let adminMatches = [];
 let activeStatusFilter = "all";
 let activeGameState = null;
@@ -53,6 +57,28 @@ async function loadAdminPhasePickSummary(phaseName) {
     console.error(error);
     return { summaries: {}, error };
   }
+}
+
+function getCachedAdminSnapshot() {
+  const saved = localStorage.getItem(ADMIN_STORAGE_KEYS.snapshot);
+
+  if (!saved) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(saved);
+  } catch (error) {
+    localStorage.removeItem(ADMIN_STORAGE_KEYS.snapshot);
+    return null;
+  }
+}
+
+function saveCachedAdminSnapshot(result) {
+  localStorage.setItem(ADMIN_STORAGE_KEYS.snapshot, JSON.stringify({
+    savedAt: new Date().toISOString(),
+    result,
+  }));
 }
 
 function getAdminTeamNameForSlug(match, slug) {
@@ -342,31 +368,44 @@ async function loadAdminSnapshot() {
   }
 }
 
+function applyAdminSnapshot(result, options = {}) {
+  const status = document.querySelector("#admin-status");
+
+  activeGameState = result.gameState;
+  adminMatches = result.matches.matches;
+  adminPickSummaryByMatch = result.pickSummary?.summaries || {};
+  adminDashboard = result.dashboard;
+  adminPhases = result.phases?.phases || [];
+  adminPlayers = result.players?.players || [];
+  status.textContent = options.cached
+    ? `Showing saved admin data - refreshing live data...`
+    : result.pickSummary?.error
+      ? `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
+      : `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches`;
+  renderAdminDashboard();
+  renderAdminPhases(adminPhases);
+  renderAdminPlayers(adminPlayers);
+  renderAdminMatches(adminMatches);
+  renderSettlementLog(result.settlementLog?.logs || []);
+}
+
 async function loadAdminMatches() {
   const status = document.querySelector("#admin-status");
 
   try {
-    status.textContent = "Loading matches...";
+    const cached = getCachedAdminSnapshot();
+
+    if (cached?.result) {
+      applyAdminSnapshot(cached.result, { cached: true });
+    } else {
+      status.textContent = "Loading matches...";
+    }
 
     const snapshot = await loadAdminSnapshot();
 
     if (snapshot.result) {
-      const result = snapshot.result;
-
-      activeGameState = result.gameState;
-      adminMatches = result.matches.matches;
-      adminPickSummaryByMatch = result.pickSummary?.summaries || {};
-      adminDashboard = result.dashboard;
-      adminPhases = result.phases?.phases || [];
-      adminPlayers = result.players?.players || [];
-      status.textContent = result.pickSummary?.error
-        ? `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
-        : `${result.gameState.activePhaseName} - ${result.gameState.gameStatus} - ${result.matches.count} matches`;
-      renderAdminDashboard();
-      renderAdminPhases(adminPhases);
-      renderAdminPlayers(adminPlayers);
-      renderAdminMatches(adminMatches);
-      renderSettlementLog(result.settlementLog?.logs || []);
+      saveCachedAdminSnapshot(snapshot.result);
+      applyAdminSnapshot(snapshot.result);
       return;
     }
 

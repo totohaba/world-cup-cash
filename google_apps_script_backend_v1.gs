@@ -1,3 +1,26 @@
+let REQUEST_CACHE_ = {
+  headers: {},
+  rows: {},
+  settings: {},
+};
+
+function resetRequestCache_() {
+  REQUEST_CACHE_ = {
+    headers: {},
+    rows: {},
+    settings: {},
+  };
+}
+
+function invalidateSheetCache_(sheetName) {
+  delete REQUEST_CACHE_.headers[sheetName];
+  delete REQUEST_CACHE_.rows[sheetName];
+
+  if (sheetName === "Settings") {
+    REQUEST_CACHE_.settings = {};
+  }
+}
+
 function testBackendSetup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -36,6 +59,10 @@ function testBackendSetup() {
 }
 
 function getSheetRows_(sheetName) {
+  if (REQUEST_CACHE_.rows[sheetName]) {
+    return REQUEST_CACHE_.rows[sheetName].map((row) => ({ ...row }));
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
 
@@ -46,12 +73,13 @@ function getSheetRows_(sheetName) {
   const values = sheet.getDataRange().getValues();
 
   if (values.length < 2) {
+    REQUEST_CACHE_.rows[sheetName] = [];
     return [];
   }
 
   const headers = values[0].map((header) => String(header).trim());
 
-  return values.slice(1).map((row) => {
+  const rows = values.slice(1).map((row) => {
     const item = {};
 
     headers.forEach((header, index) => {
@@ -60,6 +88,9 @@ function getSheetRows_(sheetName) {
 
     return item;
   });
+
+  REQUEST_CACHE_.rows[sheetName] = rows;
+  return rows.map((row) => ({ ...row }));
 }
 
 function testReadGameData() {
@@ -83,9 +114,15 @@ function testReadGameData() {
 }
 
 function getSetting_(key) {
+  if (Object.prototype.hasOwnProperty.call(REQUEST_CACHE_.settings, key)) {
+    return REQUEST_CACHE_.settings[key];
+  }
+
   const settings = getSheetRows_("Settings");
   const row = settings.find((item) => item.key === key);
-  return row ? row.value : null;
+  const value = row ? row.value : null;
+  REQUEST_CACHE_.settings[key] = value;
+  return value;
 }
 
 function setSetting_(key, value) {
@@ -178,9 +215,15 @@ function getSheet_(sheetName) {
 }
 
 function getHeaders_(sheetName) {
+  if (REQUEST_CACHE_.headers[sheetName]) {
+    return [...REQUEST_CACHE_.headers[sheetName]];
+  }
+
   const sheet = getSheet_(sheetName);
-  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
     .map((header) => String(header).trim());
+  REQUEST_CACHE_.headers[sheetName] = headers;
+  return [...headers];
 }
 
 function appendObjectRow_(sheetName, item) {
@@ -188,6 +231,7 @@ function appendObjectRow_(sheetName, item) {
   const headers = getHeaders_(sheetName);
   const row = headers.map((header) => item[header] ?? "");
   sheet.appendRow(row);
+  invalidateSheetCache_(sheetName);
 }
 
 function updateObjectRow_(sheetName, rowNumber, item) {
@@ -195,6 +239,7 @@ function updateObjectRow_(sheetName, rowNumber, item) {
   const headers = getHeaders_(sheetName);
   const row = headers.map((header) => item[header] ?? "");
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
+  invalidateSheetCache_(sheetName);
 }
 
 function csvEscape_(value) {
@@ -1462,6 +1507,8 @@ function testLockPhase() {
 }
 
 function doGet(e) {
+  resetRequestCache_();
+
   try {
     const action = e.parameter.action;
 

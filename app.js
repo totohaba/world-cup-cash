@@ -5,6 +5,7 @@ const CONFIG = {
 const STORAGE_KEYS = {
   deviceId: "worldCupCashDeviceId",
   player: "worldCupCashPlayer",
+  snapshot: "worldCupCashPlayerSnapshot",
 };
 
 let activeMatches = [];
@@ -117,6 +118,28 @@ function getSavedPlayer() {
 
 function savePlayer(player) {
   localStorage.setItem(STORAGE_KEYS.player, JSON.stringify(player));
+}
+
+function getCachedSnapshot() {
+  const saved = localStorage.getItem(STORAGE_KEYS.snapshot);
+
+  if (!saved) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(saved);
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEYS.snapshot);
+    return null;
+  }
+}
+
+function saveCachedSnapshot(result) {
+  localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({
+    savedAt: new Date().toISOString(),
+    result,
+  }));
 }
 
 function formatMoney(value, options = {}) {
@@ -776,45 +799,58 @@ async function loadPlayerSnapshot(player) {
   }
 }
 
+function applyPlayerSnapshot(result, options = {}) {
+  const status = document.querySelector("#phase-status");
+  const phaseName = document.querySelector("#phase-name");
+
+  activeGameState = result.gameState;
+  activePickSummaryByMatch = result.pickSummary?.summaries || {};
+  activePicksByMatch = indexPicksByMatch(result.playerPicks?.picks || []);
+  activeLeaderboard = result.leaderboard?.players || [];
+  activeProfile = result.profile?.player || null;
+  activePickHistory = result.pickHistory?.picks || [];
+  activeMatches = result.matches?.matches || [];
+  activePhases = result.phases?.phases || [];
+
+  phaseName.textContent = result.gameState.activePhaseName;
+  status.textContent = options.cached
+    ? `Showing saved data - refreshing live data...`
+    : result.pickSummary?.error
+      ? `${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
+      : result.gameState.gameStatus === "locked"
+        ? `Phase locked - ${result.matches.count} matches`
+        : `${result.gameState.gameStatus} - ${result.matches.count} matches`;
+  renderLeaderboard(activeLeaderboard);
+  renderProfile(activeProfile);
+  renderPickHistory(activePickHistory);
+  renderPhaseTimeline(activePhases);
+  renderMatches(activeMatches, activePicksByMatch);
+  renderPlayerSnapshotStats();
+
+  if (activeProfile) {
+    document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
+  }
+}
+
 async function loadGameState() {
   const status = document.querySelector("#phase-status");
   const phaseName = document.querySelector("#phase-name");
 
   try {
-    status.textContent = "Loading live game data...";
+    const cached = getCachedSnapshot();
+
+    if (cached?.result) {
+      applyPlayerSnapshot(cached.result, { cached: true });
+    } else {
+      status.textContent = "Loading live game data...";
+    }
 
     const player = getSavedPlayer();
     const snapshot = await loadPlayerSnapshot(player);
 
     if (snapshot.result) {
-      const result = snapshot.result;
-
-      activeGameState = result.gameState;
-      activePickSummaryByMatch = result.pickSummary?.summaries || {};
-      activePicksByMatch = indexPicksByMatch(result.playerPicks?.picks || []);
-      activeLeaderboard = result.leaderboard?.players || [];
-      activeProfile = result.profile?.player || null;
-      activePickHistory = result.pickHistory?.picks || [];
-      activeMatches = result.matches?.matches || [];
-      activePhases = result.phases?.phases || [];
-
-      phaseName.textContent = result.gameState.activePhaseName;
-      status.textContent = result.pickSummary?.error
-        ? `${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
-        : result.gameState.gameStatus === "locked"
-          ? `Phase locked - ${result.matches.count} matches`
-          : `${result.gameState.gameStatus} - ${result.matches.count} matches`;
-      renderLeaderboard(activeLeaderboard);
-      renderProfile(activeProfile);
-      renderPickHistory(activePickHistory);
-      renderPhaseTimeline(activePhases);
-      renderMatches(activeMatches, activePicksByMatch);
-      renderPlayerSnapshotStats();
-
-      if (activeProfile) {
-        document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
-      }
-
+      saveCachedSnapshot(snapshot.result);
+      applyPlayerSnapshot(snapshot.result);
       return;
     }
 
