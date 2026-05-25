@@ -1,5 +1,5 @@
 const CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzmgSpeJ3zAcU6d9hTpZMrGV75sL0tMYLEbAEvembnTQrJ7HjF2GBT0ed49PyumEi-l/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzLig-RQTU5eZ56nTvVurhXmAhkbyy12YcTn3cTIFoFbmKDc_vAh4c1pRckPJnleX3XMA/exec",
 };
 
 const STORAGE_KEYS = {
