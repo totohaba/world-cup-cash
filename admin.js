@@ -1,5 +1,5 @@
 const ADMIN_CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyFz0KgJpdwB60-Rnz3Cr8BuXVuQCuFnOFXknx8dpM6UT7aj9lj40dT2wlRg3i-umCRtA/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzBeannr4cyKT886sZ_DlvwumOfcWhr3myeVwj-cpjXkdSd_-jMegT7bU3APybGZpCBvQ/exec",
 };
 
 let adminMatches = [];
