@@ -145,6 +145,13 @@ function appendObjectRow_(sheetName, item) {
   sheet.appendRow(row);
 }
 
+function updateObjectRow_(sheetName, rowNumber, item) {
+  const sheet = getSheet_(sheetName);
+  const headers = getHeaders_(sheetName);
+  const row = headers.map((header) => item[header] ?? "");
+  sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
+}
+
 function createId_(prefix) {
   return `${prefix}_${Utilities.getUuid()}`;
 }
@@ -304,6 +311,100 @@ function testGetMatches() {
   return result;
 }
 
+function getDecimalOddsForSelection_(match, selectedTeam) {
+  if (selectedTeam === match.team_a) {
+    return Number(match.team_a_decimal_odds) || null;
+  }
+
+  if (selectedTeam === match.team_b) {
+    return Number(match.team_b_decimal_odds) || null;
+  }
+
+  throw new Error("Selected team is not in this match.");
+}
+
+function savePick(input) {
+  if (!input || !input.playerId || !input.matchId || !input.selectedTeam) {
+    throw new Error("savePick requires playerId, matchId, and selectedTeam.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const matchId = String(input.matchId).trim();
+  const selectedTeam = String(input.selectedTeam).trim();
+  const totalBetAmount = Math.max(1, Number(input.totalBetAmount) || 1);
+  const houseBetAmount = Number(getSetting_("house_bet_amount")) || 1;
+  const playerCashStake = Math.max(0, totalBetAmount - houseBetAmount);
+  const timestamp = nowIso_();
+
+  const players = getSheetRows_("Players");
+  const player = players.find((item) => item.player_id === playerId);
+
+  if (!player) {
+    throw new Error("Player not found.");
+  }
+
+  const matches = getSheetRows_("Matches");
+  const match = matches.find((item) => item.match_id === matchId);
+
+  if (!match) {
+    throw new Error("Match not found.");
+  }
+
+  if (match.status && match.status !== "future") {
+    throw new Error("Picks are only allowed for future matches.");
+  }
+
+  const decimalOdds = getDecimalOddsForSelection_(match, selectedTeam);
+  const potentialPayout = totalBetAmount * decimalOdds;
+  const picks = getSheetRows_("Picks");
+  const existingPickIndex = picks.findIndex((pick) => {
+    return pick.player_id === playerId && pick.match_id === matchId && pick.status === "active";
+  });
+
+  const pick = {
+    pick_id: existingPickIndex >= 0 ? picks[existingPickIndex].pick_id : createId_("pick"),
+    player_id: playerId,
+    match_id: matchId,
+    phase: match.phase,
+    selected_team: selectedTeam,
+    total_bet_amount: totalBetAmount,
+    house_bet_amount: houseBetAmount,
+    player_cash_stake: playerCashStake,
+    decimal_odds: decimalOdds,
+    potential_payout: potentialPayout,
+    status: "active",
+    created_at: existingPickIndex >= 0 ? picks[existingPickIndex].created_at : timestamp,
+    updated_at: timestamp,
+    settled_at: "",
+  };
+
+  if (existingPickIndex >= 0) {
+    updateObjectRow_("Picks", existingPickIndex + 2, pick);
+  } else {
+    appendObjectRow_("Picks", pick);
+  }
+
+  return {
+    saved: true,
+    pick,
+  };
+}
+
+function testSavePick() {
+  const players = getSheetRows_("Players");
+  const matches = getSheetRows_("Matches");
+
+  const result = savePick({
+    playerId: players[0].player_id,
+    matchId: matches[0].match_id,
+    selectedTeam: matches[0].team_a,
+    totalBetAmount: 1,
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function doGet(e) {
   const action = e.parameter.action;
 
@@ -321,6 +422,15 @@ function doGet(e) {
     return jsonResponse_(joinGame({
       deviceId: e.parameter.deviceId,
       displayName: e.parameter.displayName,
+    }));
+  }
+
+  if (action === "savePick") {
+    return jsonResponse_(savePick({
+      playerId: e.parameter.playerId,
+      matchId: e.parameter.matchId,
+      selectedTeam: e.parameter.selectedTeam,
+      totalBetAmount: e.parameter.totalBetAmount,
     }));
   }
 

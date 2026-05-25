@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   player: "worldCupCashPlayer",
 };
 
+let activeMatches = [];
+
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
   url.searchParams.set("action", action);
@@ -67,15 +69,20 @@ function renderPlayer(player) {
 
 function renderMatches(matches) {
   const list = document.querySelector("#matches-list");
+  const player = getSavedPlayer();
 
   if (!list) {
     return;
   }
 
+  activeMatches = matches;
+
   list.innerHTML = matches
     .map((match) => {
+      const pickDisabled = player ? "" : "disabled";
+
       return `
-        <article class="match-card">
+        <article class="match-card" data-match-id="${match.matchId}">
           <div class="team">
             <span class="team-code">${match.teamA.teamSlug}</span>
             <strong>${match.teamA.team}</strong>
@@ -90,7 +97,15 @@ function renderMatches(matches) {
             <strong>${match.teamB.team}</strong>
             <span>${match.teamBDecimalOdds}x</span>
           </div>
-          <button type="button">Make Pick</button>
+          <div class="pick-actions" role="group" aria-label="Pick winner">
+            <button type="button" data-selected-team="${match.teamASlug}" ${pickDisabled}>
+              Pick ${match.teamA.team}
+            </button>
+            <button type="button" data-selected-team="${match.teamBSlug}" ${pickDisabled}>
+              Pick ${match.teamB.team}
+            </button>
+          </div>
+          <p class="pick-status" aria-live="polite"></p>
         </article>
       `;
     })
@@ -120,12 +135,60 @@ async function handleJoinSubmit(event) {
 
     savePlayer(result.player);
     renderPlayer(result.player);
+    renderMatches(activeMatches);
   } catch (error) {
     console.error(error);
     alert("Could not join the game. Please try again.");
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "Join Game";
+  }
+}
+
+async function handlePickClick(event) {
+  const button = event.target.closest("[data-selected-team]");
+
+  if (!button) {
+    return;
+  }
+
+  const player = getSavedPlayer();
+
+  if (!player) {
+    alert("Join the game before making a pick.");
+    return;
+  }
+
+  const card = button.closest("[data-match-id]");
+  const status = card.querySelector(".pick-status");
+  const matchId = card.dataset.matchId;
+  const selectedTeam = button.dataset.selectedTeam;
+  const buttons = card.querySelectorAll("[data-selected-team]");
+
+  buttons.forEach((item) => {
+    item.disabled = true;
+  });
+  status.textContent = "Saving pick...";
+
+  try {
+    const result = await callApi("savePick", {
+      playerId: player.player_id,
+      matchId,
+      selectedTeam,
+      totalBetAmount: 1,
+    });
+
+    buttons.forEach((item) => {
+      item.classList.toggle("selected", item.dataset.selectedTeam === result.pick.selected_team);
+    });
+    status.textContent = `Saved: ${result.pick.selected_team} for $1 house bet`;
+  } catch (error) {
+    console.error(error);
+    status.textContent = "Could not save pick. Please try again.";
+  } finally {
+    buttons.forEach((item) => {
+      item.disabled = false;
+    });
   }
 }
 
@@ -142,7 +205,7 @@ async function loadGameState() {
     });
 
     phaseName.textContent = gameState.activePhaseName;
-    status.textContent = `${gameState.gameStatus} · ${matchesResult.count} matches`;
+    status.textContent = `${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderMatches(matchesResult.matches);
   } catch (error) {
     console.error(error);
@@ -152,6 +215,7 @@ async function loadGameState() {
 
 document.querySelector("#refresh-button")?.addEventListener("click", loadGameState);
 document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmit);
+document.querySelector("#matches-list")?.addEventListener("click", handlePickClick);
 
 renderPlayer(getSavedPlayer());
 loadGameState();
