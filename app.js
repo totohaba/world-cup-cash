@@ -21,18 +21,43 @@ async function callApi(action, params = {}) {
   });
 
   const response = await fetch(url.toString());
+  const responseText = await response.text();
 
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status}`);
   }
 
-  const result = await response.json();
+  let result;
+
+  try {
+    result = JSON.parse(responseText);
+  } catch (error) {
+    throw new Error(`API returned non-JSON response for ${action}`);
+  }
 
   if (result.error) {
     throw new Error(result.error);
   }
 
   return result;
+}
+
+async function loadPlayerPicks(player, phaseName) {
+  if (!player) {
+    return { picks: [], error: null };
+  }
+
+  try {
+    const result = await callApi("getPlayerPicks", {
+      playerId: player.player_id,
+      phase: phaseName,
+    });
+
+    return { picks: result.picks, error: null };
+  } catch (error) {
+    console.error(error);
+    return { picks: [], error };
+  }
 }
 
 function getOrCreateDeviceId() {
@@ -236,21 +261,18 @@ async function loadGameState() {
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
-    const picksResult = player
-      ? await callApi("getPlayerPicks", {
-          playerId: player.player_id,
-          phase: gameState.activePhaseName,
-        })
-      : { picks: [] };
+    const picksResult = await loadPlayerPicks(player, gameState.activePhaseName);
 
     activePicksByMatch = indexPicksByMatch(picksResult.picks);
 
     phaseName.textContent = gameState.activePhaseName;
-    status.textContent = `${gameState.gameStatus} - ${matchesResult.count} matches`;
+    status.textContent = picksResult.error
+      ? `${gameState.gameStatus} - ${matchesResult.count} matches - saved picks unavailable: ${picksResult.error.message}`
+      : `${gameState.gameStatus} - ${matchesResult.count} matches`;
     renderMatches(matchesResult.matches, activePicksByMatch);
   } catch (error) {
     console.error(error);
-    status.textContent = "Could not load live data. Check the Apps Script deployment.";
+    status.textContent = `Could not load live data: ${error.message}`;
   }
 }
 
