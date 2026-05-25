@@ -408,6 +408,60 @@ function testSavePick() {
   return result;
 }
 
+function normalizePick_(pick) {
+  return {
+    pickId: pick.pick_id,
+    playerId: pick.player_id,
+    matchId: pick.match_id,
+    phase: pick.phase,
+    selectedTeam: pick.selected_team,
+    totalBetAmount: Number(pick.total_bet_amount) || 0,
+    houseBetAmount: Number(pick.house_bet_amount) || 0,
+    playerCashStake: Number(pick.player_cash_stake) || 0,
+    decimalOdds: Number(pick.decimal_odds) || null,
+    potentialPayout: Number(pick.potential_payout) || 0,
+    status: pick.status,
+    createdAt: pick.created_at,
+    updatedAt: pick.updated_at,
+    settledAt: pick.settled_at,
+  };
+}
+
+function getPlayerPicks(input) {
+  if (!input || !input.playerId) {
+    throw new Error("getPlayerPicks requires playerId.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const phaseName = input.phase ? String(input.phase).trim() : "";
+  const picks = getSheetRows_("Picks")
+    .filter((pick) => {
+      const isPlayerPick = pick.player_id === playerId;
+      const isActive = pick.status === "active";
+      const isPhaseMatch = !phaseName || pick.phase === phaseName;
+      return isPlayerPick && isActive && isPhaseMatch;
+    })
+    .map(normalizePick_);
+
+  return {
+    playerId,
+    phaseName,
+    count: picks.length,
+    picks,
+  };
+}
+
+function testGetPlayerPicks() {
+  const players = getSheetRows_("Players");
+  const result = getPlayerPicks({
+    playerId: players[0].player_id,
+    phase: "Group Matchday 1",
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function doGet(e) {
   try {
     const action = e.parameter.action;
@@ -435,6 +489,13 @@ function doGet(e) {
         matchId: e.parameter.matchId,
         selectedTeam: e.parameter.selectedTeam,
         totalBetAmount: e.parameter.totalBetAmount,
+      }));
+    }
+
+    if (action === "getPlayerPicks") {
+      return jsonResponse_(getPlayerPicks({
+        playerId: e.parameter.playerId,
+        phase: e.parameter.phase,
       }));
     }
 

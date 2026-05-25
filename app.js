@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
 };
 
 let activeMatches = [];
+let activePicksByMatch = {};
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -73,7 +74,22 @@ function renderPlayer(player) {
   balance.textContent = `$${Number(player.current_balance).toFixed(0)}`;
 }
 
-function renderMatches(matches) {
+function indexPicksByMatch(picks) {
+  return picks.reduce((index, pick) => {
+    index[pick.matchId] = pick;
+    return index;
+  }, {});
+}
+
+function getPickStatusText(pick) {
+  if (!pick) {
+    return "";
+  }
+
+  return `Saved: ${pick.selectedTeam} for $${pick.totalBetAmount} total bet`;
+}
+
+function renderMatches(matches, picksByMatch = activePicksByMatch) {
   const list = document.querySelector("#matches-list");
   const player = getSavedPlayer();
 
@@ -86,6 +102,10 @@ function renderMatches(matches) {
   list.innerHTML = matches
     .map((match) => {
       const pickDisabled = player ? "" : "disabled";
+      const savedPick = picksByMatch[match.matchId];
+      const teamASelected = savedPick?.selectedTeam === match.teamASlug ? "selected" : "";
+      const teamBSelected = savedPick?.selectedTeam === match.teamBSlug ? "selected" : "";
+      const statusText = getPickStatusText(savedPick);
 
       return `
         <article class="match-card" data-match-id="${match.matchId}">
@@ -104,14 +124,14 @@ function renderMatches(matches) {
             <span>${match.teamBDecimalOdds}x</span>
           </div>
           <div class="pick-actions" role="group" aria-label="Pick winner">
-            <button type="button" data-selected-team="${match.teamASlug}" ${pickDisabled}>
+            <button class="${teamASelected}" type="button" data-selected-team="${match.teamASlug}" ${pickDisabled}>
               Pick ${match.teamA.team}
             </button>
-            <button type="button" data-selected-team="${match.teamBSlug}" ${pickDisabled}>
+            <button class="${teamBSelected}" type="button" data-selected-team="${match.teamBSlug}" ${pickDisabled}>
               Pick ${match.teamB.team}
             </button>
           </div>
-          <p class="pick-status" aria-live="polite"></p>
+          <p class="pick-status" aria-live="polite">${statusText}</p>
         </article>
       `;
     })
@@ -187,6 +207,12 @@ async function handlePickClick(event) {
     buttons.forEach((item) => {
       item.classList.toggle("selected", item.dataset.selectedTeam === result.pick.selected_team);
     });
+
+    activePicksByMatch[matchId] = {
+      matchId: result.pick.match_id,
+      selectedTeam: result.pick.selected_team,
+      totalBetAmount: Number(result.pick.total_bet_amount) || 1,
+    };
     status.textContent = `Saved: ${result.pick.selected_team} for $1 house bet`;
   } catch (error) {
     console.error(error);
@@ -206,13 +232,22 @@ async function loadGameState() {
     status.textContent = "Loading live game data...";
 
     const gameState = await callApi("getGameState");
+    const player = getSavedPlayer();
     const matchesResult = await callApi("getMatches", {
       phase: gameState.activePhaseName,
     });
+    const picksResult = player
+      ? await callApi("getPlayerPicks", {
+          playerId: player.player_id,
+          phase: gameState.activePhaseName,
+        })
+      : { picks: [] };
+
+    activePicksByMatch = indexPicksByMatch(picksResult.picks);
 
     phaseName.textContent = gameState.activePhaseName;
     status.textContent = `${gameState.gameStatus} - ${matchesResult.count} matches`;
-    renderMatches(matchesResult.matches);
+    renderMatches(matchesResult.matches, activePicksByMatch);
   } catch (error) {
     console.error(error);
     status.textContent = "Could not load live data. Check the Apps Script deployment.";
