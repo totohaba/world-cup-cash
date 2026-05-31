@@ -281,7 +281,7 @@ function getTeamPlayerImage(match, side) {
     return "";
   }
 
-  return `${source.replace("players/", "assets/featured-players/")}?v=players-updated-2`;
+  return `${source}?v=players-direct-1`;
 }
 
 function hasFinalScore(match) {
@@ -807,7 +807,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
               <div class="featured-center">
                 <span>${getMatchStageLabel(match)}</span>
                 <strong>VS</strong>
-                <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
+                <span class="match-row-time">${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
                 <button type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
               </div>
               <div class="featured-team featured-right">
@@ -829,7 +829,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
             <div class="match-row-center">
               <span>${getMatchStageLabel(match)}</span>
               <strong>VS</strong>
-              <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
+              <span class="match-row-time">${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
             </div>
             <div class="match-row-team right">
               ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}

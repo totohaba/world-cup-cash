@@ -30,9 +30,7 @@ a {
   max-width: 480px;
   margin: 0 auto;
   padding: 42px 18px 104px;
-  background:
-    radial-gradient(circle at 32% 0%, rgba(216, 169, 40, 0.13), transparent 31%),
-    linear-gradient(180deg, #06452d, #042e1c 44%, #032719);
+  background: #042e1c;
 }
 
 .app-header {
@@ -290,8 +288,8 @@ h1 {
   padding: 58px 14px 18px;
   color: white;
   background:
-    radial-gradient(circle at 50% 110%, rgba(216, 169, 40, 0.26), transparent 38%),
-    linear-gradient(135deg, #075035, #032719);
+    radial-gradient(circle at 50% 112%, rgba(216, 169, 40, 0.22), transparent 42%),
+    linear-gradient(135deg, #06462f, #032719);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
   cursor: pointer;
 }
@@ -302,9 +300,9 @@ h1 {
   inset: 0;
   z-index: 1;
   background:
-    radial-gradient(circle at 50% 7%, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.18) 20%, transparent 44%),
-    radial-gradient(circle at 17% 34%, rgba(255, 255, 255, 0.28), transparent 31%),
-    radial-gradient(circle at 83% 34%, rgba(255, 235, 158, 0.3), transparent 34%);
+    radial-gradient(ellipse at 50% 5%, rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0.2) 16%, transparent 35%),
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.22), transparent 28%),
+    radial-gradient(circle at 82% 24%, rgba(255, 235, 158, 0.22), transparent 30%);
   pointer-events: none;
 }
 
@@ -313,11 +311,11 @@ h1 {
   position: absolute;
   inset: auto 0 0;
   z-index: 2;
-  height: 58%;
+  height: 48%;
   background:
-    radial-gradient(circle at 2% 100%, rgba(2, 25, 17, 0.98), rgba(2, 25, 17, 0.78) 28%, transparent 54%),
-    radial-gradient(circle at 98% 100%, rgba(2, 25, 17, 0.98), rgba(2, 25, 17, 0.78) 28%, transparent 54%),
-    linear-gradient(0deg, rgba(3, 39, 25, 0.98), rgba(3, 39, 25, 0.68), transparent);
+    radial-gradient(circle at 2% 100%, rgba(2, 24, 16, 0.96), rgba(2, 24, 16, 0.74) 31%, transparent 62%),
+    radial-gradient(circle at 98% 100%, rgba(2, 24, 16, 0.96), rgba(2, 24, 16, 0.74) 31%, transparent 62%),
+    linear-gradient(0deg, rgba(3, 39, 25, 0.72), rgba(3, 39, 25, 0.22), transparent 82%);
   pointer-events: none;
 }
 
@@ -378,28 +376,28 @@ h1 {
 
 .featured-player {
   position: absolute;
-  bottom: -28px;
-  width: 280px;
-  max-width: 150%;
-  opacity: 0.9;
+  bottom: -112px;
+  width: 286px;
+  max-width: none;
+  opacity: 0.94;
   filter: saturate(1.06) contrast(1.03);
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 54%, rgba(0, 0, 0, 0.78) 72%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 0%, #000 54%, rgba(0, 0, 0, 0.78) 72%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 68%, rgba(0, 0, 0, 0.82) 84%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 68%, rgba(0, 0, 0, 0.82) 84%, transparent 100%);
 }
 
 .featured-art-left .featured-player {
-  left: -100px;
+  left: -98px;
 }
 
 .featured-art-right .featured-player {
-  right: -100px;
+  right: -98px;
 }
 
 .featured-flag {
   position: relative;
   z-index: 5;
-  width: 86px;
-  height: 58px;
+  width: 92px;
+  height: 62px;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 8px;
   object-fit: cover;
@@ -519,6 +517,10 @@ h1 {
   font-size: 12px;
 }
 
+.match-row-time {
+  white-space: nowrap;
+}
+
 .match-row-center strong {
   font-family: "Arial Black", Impact, Arial, sans-serif;
   font-size: 24px;
@@ -530,6 +532,7 @@ h1 {
   color: var(--green);
   background: white;
   border-color: var(--green);
+  white-space: nowrap;
 }
 
 .match-row-card .match-list-status {
@@ -957,8 +960,8 @@ h1 {
 }
 
 .team-flag {
-  width: 72px;
-  height: 48px;
+  width: 78px;
+  height: 52px;
   border: 1px solid var(--line);
   border-radius: 6px;
   object-fit: cover;
@@ -1673,21 +1676,21 @@ h1 {
   }
 
   .featured-player {
-    bottom: -28px;
-    width: 224px;
+    bottom: -118px;
+    width: 236px;
   }
 
   .featured-art-left .featured-player {
-    left: -78px;
+    left: -82px;
   }
 
   .featured-art-right .featured-player {
-    right: -78px;
+    right: -82px;
   }
 
   .featured-flag {
-    width: 54px;
-    height: 36px;
+    width: 58px;
+    height: 39px;
   }
 
   .featured-team strong {
@@ -1726,8 +1729,8 @@ h1 {
   }
 
   .team-flag {
-    width: 42px;
-    height: 28px;
+    width: 46px;
+    height: 31px;
   }
 
   .match-row-team {
@@ -1746,7 +1749,7 @@ h1 {
   }
 
   .match-row-center span {
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .match-row-center strong {
