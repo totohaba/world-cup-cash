@@ -281,7 +281,7 @@ function getTeamPlayerImage(match, side) {
     return "";
   }
 
-  return source.replace("players/", "assets/featured-players/");
+  return `${source.replace("players/", "assets/featured-players/")}?v=players-updated-1`;
 }
 
 function getTeamCode(team, slug) {
