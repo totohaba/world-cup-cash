@@ -1740,16 +1740,26 @@ h1 {
   }
 
   .featured-player {
-    bottom: -22px;
-    width: 158px;
+    bottom: -20px;
+    width: 140px;
   }
 
   .featured-art-left .featured-player {
-    left: -8px;
+    left: 8px;
   }
 
   .featured-art-right .featured-player {
-    right: -8px;
+    right: 8px;
+  }
+
+  .featured-left .featured-flag-wrap,
+  .featured-left strong {
+    transform: translateX(10px);
+  }
+
+  .featured-right .featured-flag-wrap,
+  .featured-right strong {
+    transform: translateX(-10px);
   }
 
   .featured-flag {
@@ -1757,8 +1767,18 @@ h1 {
     height: 34px;
   }
 
+  .featured-marker {
+    top: -7px;
+    right: -8px;
+    width: 28px;
+    height: 28px;
+  }
+
   .featured-team strong {
-    font-size: 11px;
+    font-size: 10px;
+    max-width: 76px;
+    line-height: 1.05;
+    overflow-wrap: normal;
   }
 
   .featured-center strong {
