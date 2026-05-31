@@ -743,44 +743,53 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
         return `
           <article class="featured-match-card" data-open-match="${match.matchId}">
             <div class="featured-label">★ Featured Match</div>
-            <div class="featured-team featured-left">
+            <div class="featured-art featured-art-left">
               ${teamAPlayer ? `<img class="featured-player" src="${teamAPlayer}" alt="" loading="lazy" />` : ""}
-              ${teamAFlag ? `<img class="featured-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
-              <strong>${match.teamA.team}</strong>
             </div>
-            <div class="featured-center">
-              <span>${match.phase}</span>
-              <strong>VS</strong>
-              <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
-              <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
-            </div>
-            <div class="featured-team featured-right">
+            <div class="featured-art featured-art-right">
               ${teamBPlayer ? `<img class="featured-player" src="${teamBPlayer}" alt="" loading="lazy" />` : ""}
-              ${teamBFlag ? `<img class="featured-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
-              <strong>${match.teamB.team}</strong>
             </div>
-            <p class="match-list-status">${pickStatusLabel}</p>
+            <div class="featured-content">
+              <div class="featured-team featured-left">
+                ${teamAFlag ? `<img class="featured-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
+                <strong>${match.teamA.team}</strong>
+              </div>
+              <div class="featured-center">
+                <span>${match.phase}</span>
+                <strong>VS</strong>
+                <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
+                <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
+              </div>
+              <div class="featured-team featured-right">
+                ${teamBFlag ? `<img class="featured-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
+                <strong>${match.teamB.team}</strong>
+              </div>
+            </div>
           </article>
         `;
       }
 
       return `
         <article class="match-row-card" data-open-match="${match.matchId}">
-          <div class="match-row-team">
-            ${teamAFlag ? `<img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
-            <strong>${getTeamCode(match.teamA, match.teamASlug)}</strong>
+          <div class="match-row-main">
+            <div class="match-row-team">
+              ${teamAFlag ? `<img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
+              <strong>${getTeamCode(match.teamA, match.teamASlug)}</strong>
+            </div>
+            <div class="match-row-center">
+              <span>${match.phase}</span>
+              <strong>VS</strong>
+              <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
+            </div>
+            <div class="match-row-team right">
+              ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
+              <strong>${getTeamCode(match.teamB, match.teamBSlug)}</strong>
+            </div>
           </div>
-          <div class="match-row-center">
-            <span>${match.phase}</span>
-            <strong>VS</strong>
-            <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
+          <div class="match-row-action">
+            <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
+            <p class="match-list-status">${pickStatusLabel}</p>
           </div>
-          <div class="match-row-team right">
-            ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
-            <strong>${getTeamCode(match.teamB, match.teamBSlug)}</strong>
-          </div>
-          <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
-          <p class="match-list-status">${pickStatusLabel}</p>
         </article>
       `;
     })

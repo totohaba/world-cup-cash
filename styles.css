@@ -282,8 +282,7 @@ h1 {
 
 .featured-match-card {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px minmax(0, 1fr);
+  display: block;
   min-height: 300px;
   overflow: hidden;
   border: 2px solid var(--gold);
@@ -335,6 +334,35 @@ h1 {
   z-index: 6;
 }
 
+.featured-art {
+  position: absolute;
+  top: 24px;
+  bottom: 0;
+  z-index: 3;
+  width: 38%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.featured-art-left {
+  left: 0;
+}
+
+.featured-art-right {
+  right: 0;
+}
+
+.featured-content {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px minmax(0, 1fr);
+  gap: 8px;
+  height: 100%;
+  min-height: 218px;
+  align-items: end;
+}
+
 .featured-team {
   position: relative;
   display: grid;
@@ -348,7 +376,7 @@ h1 {
 .featured-player {
   position: absolute;
   bottom: -28px;
-  width: 268px;
+  width: 280px;
   max-width: 150%;
   opacity: 0.9;
   filter: saturate(1.06) contrast(1.03);
@@ -356,12 +384,12 @@ h1 {
   mask-image: linear-gradient(180deg, #000 0%, #000 54%, rgba(0, 0, 0, 0.78) 72%, transparent 100%);
 }
 
-.featured-left .featured-player {
-  left: -88px;
+.featured-art-left .featured-player {
+  left: -100px;
 }
 
-.featured-right .featured-player {
-  right: -88px;
+.featured-art-right .featured-player {
+  right: -100px;
 }
 
 .featured-flag {
@@ -422,8 +450,8 @@ h1 {
 
 .match-row-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 124px minmax(0, 1fr) 132px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 116px;
+  gap: 10px;
   align-items: center;
   position: relative;
   border: 1px solid var(--line);
@@ -431,6 +459,21 @@ h1 {
   padding: 16px;
   background: rgba(255, 255, 255, 0.86);
   cursor: pointer;
+}
+
+.match-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.match-row-action {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
 }
 
 .match-row-team {
@@ -471,7 +514,7 @@ h1 {
 
 .match-row-card button {
   justify-self: center;
-  min-width: 116px;
+  min-width: 98px;
   color: var(--green);
   background: white;
   border-color: var(--green);
@@ -479,7 +522,6 @@ h1 {
 
 .match-row-card .match-list-status {
   position: static;
-  grid-column: 4;
   color: var(--muted);
   text-align: center;
 }
@@ -1603,9 +1645,19 @@ h1 {
   }
 
   .featured-match-card {
-    grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr);
     min-height: 208px;
     padding: 36px 8px 14px;
+  }
+
+  .featured-art {
+    top: 22px;
+    width: 38%;
+  }
+
+  .featured-content {
+    grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr);
+    min-height: 158px;
+    gap: 4px;
   }
 
   .featured-player {
@@ -1613,11 +1665,11 @@ h1 {
     width: 224px;
   }
 
-  .featured-left .featured-player {
+  .featured-art-left .featured-player {
     left: -78px;
   }
 
-  .featured-right .featured-player {
+  .featured-art-right .featured-player {
     right: -78px;
   }
 
@@ -1646,10 +1698,19 @@ h1 {
   }
 
   .match-row-card {
-    grid-template-columns: minmax(0, 58px) 62px minmax(0, 58px) 72px;
-    gap: 5px;
+    grid-template-columns: minmax(0, 1fr) 76px;
+    gap: 6px;
     padding: 9px 8px;
     min-height: 86px;
+  }
+
+  .match-row-main {
+    grid-template-columns: minmax(0, 52px) 56px minmax(0, 52px);
+    gap: 5px;
+  }
+
+  .match-row-action {
+    gap: 2px;
   }
 
   .team-flag {
@@ -1681,7 +1742,7 @@ h1 {
   }
 
   .match-row-card button {
-    min-width: 68px;
+    min-width: 70px;
     padding: 7px 5px;
     font-size: 10px;
     line-height: 1.1;
