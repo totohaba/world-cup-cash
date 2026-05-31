@@ -19,6 +19,8 @@ let activePhases = [];
 let activeDetailMatchId = "";
 let activeDetailSelection = "";
 let activeDetailBetAmount = 1;
+let activeFeaturedMatchId = "";
+let activeFeaturedMatchKey = "";
 
 async function callApi(action, params = {}) {
   const url = new URL(CONFIG.appsScriptUrl);
@@ -213,6 +215,64 @@ function getPickOutcomeText(pick) {
   }
 
   return getPickStatusText(pick);
+}
+
+function getMatchWinnerSlug(match) {
+  if (!isMatchClosed(match)) {
+    return "";
+  }
+
+  if (match.teamAdvanced) {
+    return String(match.teamAdvanced).trim();
+  }
+
+  const teamAGoals = Number(match.teamAGoals);
+  const teamBGoals = Number(match.teamBGoals);
+
+  if (!Number.isFinite(teamAGoals) || !Number.isFinite(teamBGoals) || teamAGoals === teamBGoals) {
+    return "";
+  }
+
+  return teamAGoals > teamBGoals ? match.teamASlug : match.teamBSlug;
+}
+
+function getMatchMarker(match, side, savedPick) {
+  const slug = getTeamSlug(match, side);
+  const winnerSlug = getMatchWinnerSlug(match);
+
+  if (winnerSlug) {
+    return winnerSlug === slug ? "star" : "";
+  }
+
+  if (!isMatchClosed(match) && savedPick?.selectedTeam === slug) {
+    return "check";
+  }
+
+  return "";
+}
+
+function getActionButtonClass(actionText) {
+  if (actionText === "Update Bet") {
+    return "bet-button-update";
+  }
+
+  if (actionText === "Make Bet") {
+    return "bet-button-make";
+  }
+
+  return "bet-button-final";
+}
+
+function renderTeamMarker(marker, className) {
+  if (marker === "star") {
+    return `<img class="${className}" src="assets/yellow-star.png" alt="Winner" loading="lazy" />`;
+  }
+
+  if (marker === "check") {
+    return `<img class="${className}" src="assets/checkmark.png" alt="Picked" loading="lazy" />`;
+  }
+
+  return "";
 }
 
 function getAvailableToBet() {
@@ -775,7 +835,20 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
     return;
   }
 
-  list.innerHTML = matches
+  const matchKey = `${activeGameState?.activePhaseName || ""}:${matches.map((match) => match.matchId).join("|")}`;
+
+  if (activeFeaturedMatchKey !== matchKey || !matches.some((match) => match.matchId === activeFeaturedMatchId)) {
+    activeFeaturedMatchKey = matchKey;
+    activeFeaturedMatchId = matches[Math.floor(Math.random() * matches.length)]?.matchId || "";
+  }
+
+  const featuredMatch = matches.find((match) => match.matchId === activeFeaturedMatchId) || matches[0];
+  const displayMatches = [
+    featuredMatch,
+    ...matches.filter((match) => match.matchId !== featuredMatch.matchId),
+  ];
+
+  list.innerHTML = displayMatches
     .map((match, index) => {
       const matchComplete = isMatchClosed(match);
       const readOnly = matchComplete || gameLocked;
@@ -785,6 +858,9 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
       const teamAFlag = getTeamFlag(match, "A");
       const teamBFlag = getTeamFlag(match, "B");
       const actionText = matchComplete ? (savedPick ? "View Bet" : "Final") : savedPick ? "Update Bet" : "Make Bet";
+      const actionClass = getActionButtonClass(actionText);
+      const teamAMarker = getMatchMarker(match, "A", savedPick);
+      const teamBMarker = getMatchMarker(match, "B", savedPick);
 
       if (index === 0) {
         const teamAPlayer = getTeamPlayerImage(match, "A");
@@ -801,17 +877,27 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
             </div>
             <div class="featured-content">
               <div class="featured-team featured-left">
-                ${teamAFlag ? `<img class="featured-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
+                ${teamAFlag ? `
+                  <span class="featured-flag-wrap">
+                    <img class="featured-flag" src="${teamAFlag}" alt="" loading="lazy" />
+                    ${renderTeamMarker(teamAMarker, "featured-marker")}
+                  </span>
+                ` : ""}
                 <strong>${match.teamA.team}</strong>
               </div>
               <div class="featured-center">
                 <span>${getMatchStageLabel(match)}</span>
                 <strong>VS</strong>
                 <span class="match-row-time">${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
-                <button type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
+                <button class="${actionClass}" type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
               </div>
               <div class="featured-team featured-right">
-                ${teamBFlag ? `<img class="featured-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
+                ${teamBFlag ? `
+                  <span class="featured-flag-wrap">
+                    <img class="featured-flag" src="${teamBFlag}" alt="" loading="lazy" />
+                    ${renderTeamMarker(teamBMarker, "featured-marker")}
+                  </span>
+                ` : ""}
                 <strong>${match.teamB.team}</strong>
               </div>
             </div>
@@ -823,7 +909,12 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
         <article class="match-row-card" data-open-match="${match.matchId}">
           <div class="match-row-main">
             <div class="match-row-team">
-              ${teamAFlag ? `<img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />` : ""}
+              ${teamAFlag ? `
+                <span class="team-flag-wrap">
+                  <img class="team-flag" src="${teamAFlag}" alt="" loading="lazy" />
+                  ${renderTeamMarker(teamAMarker, "team-marker")}
+                </span>
+              ` : ""}
               <strong>${getTeamCode(match.teamA, match.teamASlug)}</strong>
             </div>
             <div class="match-row-center">
@@ -832,12 +923,17 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
               <span class="match-row-time">${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
             </div>
             <div class="match-row-team right">
-              ${teamBFlag ? `<img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
+              ${teamBFlag ? `
+                <span class="team-flag-wrap">
+                  <img class="team-flag" src="${teamBFlag}" alt="" loading="lazy" />
+                  ${renderTeamMarker(teamBMarker, "team-marker")}
+                </span>
+              ` : ""}
               <strong>${getTeamCode(match.teamB, match.teamBSlug)}</strong>
             </div>
           </div>
           <div class="match-row-action">
-            <button type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
+            <button class="${actionClass}" type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
             <p class="match-list-status">${pickStatusLabel}</p>
           </div>
         </article>

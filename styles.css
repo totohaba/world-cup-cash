@@ -376,6 +376,16 @@ h1 {
   padding-bottom: 0;
 }
 
+.featured-left .featured-flag-wrap,
+.featured-left strong {
+  transform: translateX(-31px);
+}
+
+.featured-right .featured-flag-wrap,
+.featured-right strong {
+  transform: translateX(31px);
+}
+
 .featured-player {
   position: absolute;
   bottom: -20px;
@@ -395,15 +405,31 @@ h1 {
   right: -18px;
 }
 
-.featured-flag {
+.featured-flag-wrap {
   position: relative;
   z-index: 5;
+  display: inline-grid;
+  place-items: center;
+}
+
+.featured-flag {
+  display: block;
   width: 98px;
   height: 66px;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 8px;
   object-fit: cover;
   background: white;
+}
+
+.featured-marker {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
 }
 
 .featured-team strong {
@@ -504,7 +530,7 @@ h1 {
 .match-row-team strong {
   overflow-wrap: anywhere;
   font-family: "Arial Black", Impact, Arial, sans-serif;
-  font-size: 18px;
+  font-size: 27px;
   text-transform: uppercase;
 }
 
@@ -533,10 +559,44 @@ h1 {
   justify-self: center;
   min-width: 132px;
   padding: 13px 16px;
+  white-space: nowrap;
+}
+
+.team-flag-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.team-marker {
+  position: absolute;
+  top: -9px;
+  right: -10px;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
+}
+
+.featured-center .bet-button-make,
+.match-row-card .bet-button-make {
+  color: white;
+  background: linear-gradient(180deg, #168547, #08612f);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.featured-center .bet-button-update,
+.match-row-card .bet-button-update {
+  color: var(--green-dark);
+  background: var(--gold);
+  border-color: #b8870f;
+}
+
+.featured-center .bet-button-final,
+.match-row-card .bet-button-final {
   color: var(--green);
   background: white;
   border-color: var(--green);
-  white-space: nowrap;
 }
 
 .match-row-card .match-list-status {
@@ -1742,10 +1802,17 @@ h1 {
   }
 
   .match-row-team strong {
-    font-size: 11px;
+    font-size: 17px;
     line-height: 1.05;
     white-space: nowrap;
     overflow-wrap: normal;
+  }
+
+  .team-marker {
+    top: -7px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
   }
 
   .match-row-center {
