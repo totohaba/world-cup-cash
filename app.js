@@ -1026,6 +1026,39 @@ function renderSettledDetailSummary(savedPick) {
   `;
 }
 
+function renderBetWheel(value, maxValue, disabled = false) {
+  const max = Math.max(1, Number(maxValue) || 1);
+  const current = Math.min(max, Math.max(1, Number(value) || 1));
+  let start = Math.max(1, current - 1);
+
+  if (start + 2 > max) {
+    start = Math.max(1, max - 2);
+  }
+
+  const values = Array.from({ length: Math.min(3, max) }, (_, index) => start + index);
+
+  while (values.length < 3) {
+    values.push("");
+  }
+
+  return `
+    <div class="bet-wheel" role="group" aria-label="Your bet amount">
+      <button type="button" data-bet-step="-1" ${disabled || current <= 1 ? "disabled" : ""} aria-label="Decrease bet">▲</button>
+      <div class="bet-wheel-values">
+        ${values.map((amount) => amount ? `
+          <button
+            type="button"
+            class="${amount === current ? "selected" : ""}"
+            data-bet-amount="${amount}"
+            ${disabled ? "disabled" : ""}
+          >$${amount}</button>
+        ` : `<span></span>`).join("")}
+      </div>
+      <button type="button" data-bet-step="1" ${disabled || current >= max ? "disabled" : ""} aria-label="Increase bet">▼</button>
+    </div>
+  `;
+}
+
 function renderDetailStatsTable(match) {
   const teamA = getTeam(match, "A");
   const teamB = getTeam(match, "B");
@@ -1116,7 +1149,7 @@ function renderMatchDetail() {
       <div class="detail-bet-grid">
         <label>
           Your Bet
-          <input type="number" min="1" max="${maxTotalBet}" step="1" value="${activeDetailBetAmount}" data-detail-bet ${readOnly ? "disabled" : ""} />
+          ${renderBetWheel(activeDetailBetAmount, maxTotalBet, readOnly)}
         </label>
         <div class="detail-payout">
           <span>Potential Payout</span>
@@ -1221,8 +1254,28 @@ async function handleDetailPlaceBet() {
     return;
   }
 
+  const previousPick = activePicksByMatch[match.matchId];
+  const optimisticPick = {
+    matchId: match.matchId,
+    selectedTeam: activeDetailSelection,
+    selectedTeamName: getTeamNameForSlug(match, activeDetailSelection),
+    totalBetAmount: activeDetailBetAmount,
+    playerCashStake: Math.max(0, activeDetailBetAmount - 1),
+  };
+
+  activePicksByMatch[match.matchId] = optimisticPick;
+
+  if (activeProfile) {
+    const previousStake = previousPick ? Number(previousPick.playerCashStake) || 0 : 0;
+    const nextStake = optimisticPick.playerCashStake;
+    activeProfile.pendingBets = Math.max(0, (Number(activeProfile.pendingBets) || 0) - previousStake + nextStake);
+    activeProfile.availableToBet = Math.max(0, (Number(activeProfile.availableToBet) || 0) + previousStake - nextStake);
+    renderPlayerSnapshotStats();
+  }
+
   button.disabled = true;
-  status.textContent = "Saving pick...";
+  status.textContent = "Saving...";
+  renderMatches(activeMatches, activePicksByMatch);
 
   try {
     const result = await callApi("savePick", {
@@ -1242,11 +1295,17 @@ async function handleDetailPlaceBet() {
     status.textContent = `Saved: ${activePicksByMatch[match.matchId].selectedTeamName} for ${formatMoney(result.pick.total_bet_amount)} total bet`;
     renderMatches(activeMatches, activePicksByMatch);
     renderMatchDetail();
-    loadSummaryData();
   } catch (error) {
     console.error(error);
+    if (previousPick) {
+      activePicksByMatch[match.matchId] = previousPick;
+    } else {
+      delete activePicksByMatch[match.matchId];
+    }
     status.textContent = `Could not save pick: ${error.message}`;
     button.disabled = false;
+    renderMatches(activeMatches, activePicksByMatch);
+    renderMatchDetail();
   }
 }
 
@@ -1264,6 +1323,8 @@ function handleMatchesListClick(event) {
 function handleMatchDetailClick(event) {
   const teamButton = event.target.closest("[data-detail-team]");
   const placeBetButton = event.target.closest("[data-place-bet]");
+  const betAmountButton = event.target.closest("[data-bet-amount]");
+  const betStepButton = event.target.closest("[data-bet-step]");
   const prevButton = event.target.closest("[data-detail-prev]");
   const nextButton = event.target.closest("[data-detail-next]");
 
@@ -1275,6 +1336,21 @@ function handleMatchDetailClick(event) {
 
   if (placeBetButton) {
     handleDetailPlaceBet();
+    return;
+  }
+
+  if (betAmountButton) {
+    activeDetailBetAmount = Number(betAmountButton.dataset.betAmount) || 1;
+    renderMatchDetail();
+    return;
+  }
+
+  if (betStepButton) {
+    const savedPick = activePicksByMatch[activeDetailMatchId];
+    const max = getMaxTotalBet(savedPick);
+    const step = Number(betStepButton.dataset.betStep) || 0;
+    activeDetailBetAmount = Math.min(max, Math.max(1, activeDetailBetAmount + step));
+    renderMatchDetail();
     return;
   }
 
