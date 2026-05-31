@@ -421,10 +421,11 @@ Nickname
 Star player
 Star Player Position
 Team Slug
+Group
 Flag Image
 Emblem Image
 Star Player Image
-The app should use this file for team-level information across the game, including names, rankings, nicknames, star players, and image paths.
+The app should use this file for team-level information across the game, including names, rankings, nicknames, star players, group assignments, and image paths.
 #### 20.2.2 Upload Matches
 The Upload Matches button lets the admin upload the match, odds, and results CSV.
 Expected file:

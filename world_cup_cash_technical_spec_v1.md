@@ -186,11 +186,12 @@ Recommended columns:
 - `star_player`
 - `star_player_position`
 - `team_slug`
+- `group`
 - `flag_image`
 - `emblem_image`
 - `star_player_image`
 
-The `team_slug` should be the stable ID used throughout the app.
+The `team_slug` should be the stable ID used throughout the app. The `group` column stores the group-stage assignment, such as `A`, `B`, or `C`.
 
 ## 11. Sheet: Matches
 

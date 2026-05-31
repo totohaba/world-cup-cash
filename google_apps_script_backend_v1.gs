@@ -381,6 +381,7 @@ function normalizeTeam_(team) {
 
   return {
     team: team.team,
+    group: team.group || team.Group || "",
     fifaRank: Number(team.fifa_rank),
     nickname: team.nickname,
     starPlayer: team.star_player,
@@ -390,6 +391,10 @@ function normalizeTeam_(team) {
     emblemImage: team.emblem_image,
     starPlayerImage: team.star_player_image,
   };
+}
+
+function hasMatchScore_(match) {
+  return match.team_a_goals !== "" && match.team_a_goals != null && match.team_b_goals !== "" && match.team_b_goals != null;
 }
 
 function normalizeMatch_(match, teamsBySlug) {
@@ -518,7 +523,7 @@ function savePick(input) {
   const matchStatus = String(match.status || "future").trim();
   const pickableStatuses = ["future", "open", "setup"];
 
-  if (!pickableStatuses.includes(matchStatus)) {
+  if (!pickableStatuses.includes(matchStatus) || hasMatchScore_(match)) {
     throw new Error(`Picks are not allowed for matches with status: ${matchStatus}.`);
   }
 

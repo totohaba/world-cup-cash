@@ -281,7 +281,57 @@ function getTeamPlayerImage(match, side) {
     return "";
   }
 
-  return `${source.replace("players/", "assets/featured-players/")}?v=players-updated-1`;
+  return `${source.replace("players/", "assets/featured-players/")}?v=players-updated-2`;
+}
+
+function hasFinalScore(match) {
+  return match?.teamAGoals !== "" && match?.teamAGoals != null && match?.teamBGoals !== "" && match?.teamBGoals != null;
+}
+
+function isMatchClosed(match) {
+  const status = String(match?.status || "").toLowerCase();
+  return ["settled", "final", "complete"].includes(status) || hasFinalScore(match);
+}
+
+function getKnockoutLabel(phaseName) {
+  const phase = String(phaseName || "").trim();
+
+  if (/round of 32/i.test(phase)) {
+    return "Round 32";
+  }
+
+  if (/round of 16/i.test(phase)) {
+    return "Round 16";
+  }
+
+  if (/quarter/i.test(phase)) {
+    return "Quarterfinal";
+  }
+
+  if (/semi/i.test(phase)) {
+    return "Semifinal";
+  }
+
+  if (/third/i.test(phase)) {
+    return "Third Place";
+  }
+
+  if (/final/i.test(phase)) {
+    return "Final";
+  }
+
+  return phase;
+}
+
+function getMatchStageLabel(match) {
+  const phase = String(match?.phase || "");
+
+  if (/group/i.test(phase)) {
+    const group = match?.teamA?.group || match?.teamB?.group || "";
+    return group ? `Group ${group}` : phase;
+  }
+
+  return getKnockoutLabel(phase);
 }
 
 function getTeamCode(team, slug) {
@@ -466,7 +516,7 @@ function enrichPickWithMatch(pick, match) {
 }
 
 function getMatchPickStatus(match, savedPick, readOnly) {
-  if (match.status === "settled" || match.status === "final") {
+  if (isMatchClosed(match)) {
     return savedPick ? getPickOutcomeText(savedPick) : "Final";
   }
 
@@ -727,14 +777,14 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
 
   list.innerHTML = matches
     .map((match, index) => {
-      const matchComplete = match.status === "final" || match.status === "settled";
+      const matchComplete = isMatchClosed(match);
       const readOnly = matchComplete || gameLocked;
       const savedPick = enrichPickWithMatch(picksByMatch[match.matchId], match);
       const finalScore = `${match.teamAGoals} - ${match.teamBGoals}`;
       const pickStatusLabel = getMatchPickStatus(match, savedPick, readOnly);
       const teamAFlag = getTeamFlag(match, "A");
       const teamBFlag = getTeamFlag(match, "B");
-      const actionText = savedPick ? "Update Bet" : "Make Bet";
+      const actionText = matchComplete ? (savedPick ? "View Bet" : "Final") : savedPick ? "Update Bet" : "Make Bet";
 
       if (index === 0) {
         const teamAPlayer = getTeamPlayerImage(match, "A");
@@ -755,10 +805,10 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
                 <strong>${match.teamA.team}</strong>
               </div>
               <div class="featured-center">
-                <span>${match.phase}</span>
+                <span>${getMatchStageLabel(match)}</span>
                 <strong>VS</strong>
                 <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
-                <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
+                <button type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
               </div>
               <div class="featured-team featured-right">
                 ${teamBFlag ? `<img class="featured-flag" src="${teamBFlag}" alt="" loading="lazy" />` : ""}
@@ -777,7 +827,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
               <strong>${getTeamCode(match.teamA, match.teamASlug)}</strong>
             </div>
             <div class="match-row-center">
-              <span>${match.phase}</span>
+              <span>${getMatchStageLabel(match)}</span>
               <strong>VS</strong>
               <span>${matchComplete ? finalScore : formatMatchDateTime(match.matchDateTime)}</span>
             </div>
@@ -787,7 +837,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
             </div>
           </div>
           <div class="match-row-action">
-            <button type="button" data-open-match-button="${match.matchId}">${actionText}</button>
+            <button type="button" data-open-match-button="${match.matchId}" ${readOnly ? "disabled" : ""}>${actionText}</button>
             <p class="match-list-status">${pickStatusLabel}</p>
           </div>
         </article>
@@ -800,7 +850,7 @@ function getDetailMatch() {
   return activeMatches.find((match) => match.matchId === activeDetailMatchId) || activeMatches[0];
 }
 
-function renderDetailTeam(match, side) {
+function renderDetailTeam(match, side, readOnly = false) {
   const team = getTeam(match, side);
   const slug = getTeamSlug(match, side);
   const selectedClass = activeDetailSelection === slug ? "selected" : "";
@@ -818,7 +868,7 @@ function renderDetailTeam(match, side) {
         ${emblem ? `<img class="detail-emblem" src="${emblem}" alt="" loading="lazy" />` : ""}
       </div>
       <h3>${team.team}</h3>
-      <button class="${selectedClass}" type="button" data-detail-team="${slug}">Pick ${team.team}</button>
+      <button class="${selectedClass}" type="button" data-detail-team="${slug}" ${readOnly ? "disabled" : ""}>Pick ${team.team}</button>
       <dl>
         <div><dt>FIFA Rank</dt><dd>${team.fifaRank || "--"}</dd></div>
         <div><dt>Betting Odds</dt><dd>${odds || "--"}x</dd></div>
@@ -841,7 +891,7 @@ function renderMatchDetail() {
 
   activeDetailMatchId = match.matchId;
   const savedPick = enrichPickWithMatch(activePicksByMatch[match.matchId], match);
-  const matchComplete = match.status === "final" || match.status === "settled";
+  const matchComplete = isMatchClosed(match);
   const readOnly = matchComplete || activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
 
   if (!activeDetailSelection) {
@@ -856,13 +906,13 @@ function renderMatchDetail() {
   container.innerHTML = `
     <article class="detail-match-hero">
       <div class="detail-match-meta">
-        <span>${match.phase}</span>
+        <span>${getMatchStageLabel(match)}</span>
         <strong>VS</strong>
         <span>${formatMatchDateTime(match.matchDateTime)}</span>
       </div>
       <div class="detail-teams-grid">
-        ${renderDetailTeam(match, "A")}
-        ${renderDetailTeam(match, "B")}
+        ${renderDetailTeam(match, "A", readOnly)}
+        ${renderDetailTeam(match, "B", readOnly)}
       </div>
     </article>
     <section class="detail-bet-panel">
@@ -880,7 +930,7 @@ function renderMatchDetail() {
       </div>
       <p class="detail-selected-copy">Selected: ${selectedTeamName}</p>
       <button class="place-bet-button" type="button" data-place-bet ${readOnly ? "disabled" : ""}>
-        ${savedPick ? "Update Bet" : "Place Bet"}
+        ${matchComplete ? (savedPick ? "View Bet" : "Betting Closed") : savedPick ? "Update Bet" : "Place Bet"}
       </button>
       <p class="pick-status" data-detail-status aria-live="polite">${savedPick ? getPickStatusText(savedPick) : ""}</p>
     </section>
@@ -966,6 +1016,12 @@ async function handleDetailPlaceBet() {
   }
 
   if (!match || !activeDetailSelection) {
+    return;
+  }
+
+  if (isMatchClosed(match)) {
+    status.textContent = "Betting is closed for this match.";
+    button.disabled = true;
     return;
   }
 
