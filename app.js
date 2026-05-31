@@ -977,6 +977,88 @@ function renderDetailTeam(match, side, readOnly = false) {
   `;
 }
 
+function renderDetailFlagBlock(match, side) {
+  const flag = getTeamFlag(match, side);
+  const winnerSlug = getMatchWinnerSlug(match);
+  const marker = winnerSlug && winnerSlug === getTeamSlug(match, side) ? "star" : "";
+
+  return `
+    <div class="detail-flag-block">
+      ${flag ? `<img class="detail-flag" src="${flag}" alt="" loading="lazy" />` : ""}
+      ${renderTeamMarker(marker, "detail-marker")}
+    </div>
+  `;
+}
+
+function renderDetailPickButton(match, side, readOnly) {
+  const team = getTeam(match, side);
+  const slug = getTeamSlug(match, side);
+  const code = getTeamCode(team, slug);
+  const selectedClass = !readOnly && activeDetailSelection === slug ? "selected" : "";
+
+  return `<button class="${selectedClass}" type="button" data-detail-team="${slug}" ${readOnly ? "disabled" : ""}>Pick ${code}</button>`;
+}
+
+function renderSettledDetailSummary(savedPick) {
+  if (!savedPick) {
+    return `
+      <section class="detail-result-panel">
+        <h3>No Bet Placed</h3>
+        <div class="detail-result-grid">
+          <span>Your Pick</span><strong>--</strong>
+          <span>Result</span><strong>No bet placed</strong>
+        </div>
+      </section>
+    `;
+  }
+
+  const resultText = savedPick.status === "draw" ? "Draw - no money won or lost" : getPickOutcomeText(savedPick);
+
+  return `
+    <section class="detail-result-panel">
+      <h3>Bet Result</h3>
+      <div class="detail-result-grid">
+        <span>Your Pick</span><strong>${savedPick.selectedTeamName || savedPick.selectedTeam}</strong>
+        <span>Total Bet</span><strong>${formatMoney(savedPick.totalBetAmount)}</strong>
+        <span>Result</span><strong>${resultText}</strong>
+      </div>
+    </section>
+  `;
+}
+
+function renderDetailStatsTable(match) {
+  const teamA = getTeam(match, "A");
+  const teamB = getTeam(match, "B");
+  const teamAOdds = getTeamOdds(match, "A");
+  const teamBOdds = getTeamOdds(match, "B");
+  const teamAProbability = getImpliedProbability(teamAOdds).toFixed(0);
+  const teamBProbability = getImpliedProbability(teamBOdds).toFixed(0);
+  const rows = [
+    ["FIFA Rank", teamA.fifaRank || "--", teamB.fifaRank || "--"],
+    ["Betting Odds", teamAOdds ? `${teamAOdds}x` : "--", teamBOdds ? `${teamBOdds}x` : "--"],
+    ["Win Probability", `${teamAProbability}%`, `${teamBProbability}%`],
+    ["Nickname", teamA.nickname || "--", teamB.nickname || "--"],
+    ["Star Player", teamA.starPlayer || "--", teamB.starPlayer || "--"],
+    ["Position", teamA.starPlayerPosition || "--", teamB.starPlayerPosition || "--"],
+  ];
+
+  return `
+    <div class="detail-stats-table">
+      <div class="detail-stats-heading">
+        <strong>${teamA.team}</strong>
+        <strong>${teamB.team}</strong>
+      </div>
+      ${rows.map(([label, valueA, valueB]) => `
+        <div class="detail-stats-row">
+          <span>${valueA}</span>
+          <strong>${label}</strong>
+          <span>${valueB}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderMatchDetail() {
   const container = document.querySelector("#match-detail-content");
   const match = getDetailMatch();
@@ -986,50 +1068,68 @@ function renderMatchDetail() {
   }
 
   activeDetailMatchId = match.matchId;
-  const savedPick = enrichPickWithMatch(activePicksByMatch[match.matchId], match);
+  const savedPick = enrichPickWithMatch(
+    activePicksByMatch[match.matchId] || activePickHistory.find((pick) => pick.matchId === match.matchId),
+    match,
+  );
   const matchComplete = isMatchClosed(match);
   const readOnly = matchComplete || activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
 
-  if (!activeDetailSelection) {
-    activeDetailSelection = savedPick?.selectedTeam || match.teamASlug;
+  if (!activeDetailSelection && savedPick) {
+    activeDetailSelection = savedPick.selectedTeam;
   }
 
   const maxTotalBet = getMaxTotalBet(savedPick);
   activeDetailBetAmount = Math.min(maxTotalBet, Math.max(1, Number(activeDetailBetAmount || savedPick?.totalBetAmount) || 1));
   const payoutText = getPayoutText(match, activeDetailSelection, activeDetailBetAmount);
-  const selectedTeamName = getTeamNameForSlug(match, activeDetailSelection);
+  const selectedTeamName = activeDetailSelection ? getTeamNameForSlug(match, activeDetailSelection) : "";
+  const payoutValue = activeDetailSelection ? payoutText.replace("Potential Payout ", "") : "N/A";
+  const payoutClass = activeDetailSelection ? "" : " is-empty";
+  const teamAPlayer = getTeamPlayerImage(match, "A");
+  const teamBPlayer = getTeamPlayerImage(match, "B");
+  const detailTimeText = matchComplete ? `${match.teamAGoals} - ${match.teamBGoals}` : formatMatchDateTime(match.matchDateTime);
 
   container.innerHTML = `
     <article class="detail-match-hero">
+      <div class="detail-player-art detail-player-art-left">
+        ${teamAPlayer ? `<img class="detail-player" src="${teamAPlayer}" alt="" loading="lazy" />` : ""}
+      </div>
+      <div class="detail-player-art detail-player-art-right">
+        ${teamBPlayer ? `<img class="detail-player" src="${teamBPlayer}" alt="" loading="lazy" />` : ""}
+      </div>
       <div class="detail-match-meta">
+        ${renderDetailFlagBlock(match, "A")}
         <span>${getMatchStageLabel(match)}</span>
         <strong>VS</strong>
-        <span>${formatMatchDateTime(match.matchDateTime)}</span>
+        <span>${detailTimeText}</span>
+        ${renderDetailFlagBlock(match, "B")}
       </div>
-      <div class="detail-teams-grid">
-        ${renderDetailTeam(match, "A", readOnly)}
-        ${renderDetailTeam(match, "B", readOnly)}
+      ${renderDetailStatsTable(match)}
+      <div class="detail-pick-actions">
+        ${renderDetailPickButton(match, "A", readOnly)}
+        ${renderDetailPickButton(match, "B", readOnly)}
       </div>
     </article>
+    ${matchComplete ? renderSettledDetailSummary(savedPick) : `
     <section class="detail-bet-panel">
       <h3>$1 House Money Included</h3>
       <div class="detail-bet-grid">
         <label>
           Your Bet
           <input type="number" min="1" max="${maxTotalBet}" step="1" value="${activeDetailBetAmount}" data-detail-bet ${readOnly ? "disabled" : ""} />
-          <span>Max ${formatMoney(maxTotalBet)}</span>
         </label>
         <div class="detail-payout">
           <span>Potential Payout</span>
-          <strong>${payoutText.replace("Potential Payout ", "")}</strong>
+          <strong class="${payoutClass}">${payoutValue}</strong>
         </div>
       </div>
-      <p class="detail-selected-copy">Selected: ${selectedTeamName}</p>
-      <button class="place-bet-button" type="button" data-place-bet ${readOnly ? "disabled" : ""}>
-        ${matchComplete ? (savedPick ? "View Bet" : "Betting Closed") : savedPick ? "Update Bet" : "Place Bet"}
+      <p class="detail-selected-copy">${selectedTeamName ? `Selected: ${selectedTeamName}` : "Select a team to place your bet"}</p>
+      <button class="place-bet-button" type="button" data-place-bet ${readOnly || !activeDetailSelection ? "disabled" : ""}>
+        ${savedPick ? "Update Bet" : "Place Bet"}
       </button>
       <p class="pick-status" data-detail-status aria-live="polite">${savedPick ? getPickStatusText(savedPick) : ""}</p>
     </section>
+    `}
   `;
 }
 
@@ -1042,7 +1142,7 @@ function openMatchDetail(matchId) {
 
   const savedPick = activePicksByMatch[match.matchId];
   activeDetailMatchId = match.matchId;
-  activeDetailSelection = savedPick?.selectedTeam || match.teamASlug;
+  activeDetailSelection = savedPick?.selectedTeam || "";
   activeDetailBetAmount = Number(savedPick?.totalBetAmount) || 1;
   document.querySelector("#match-detail-view").hidden = false;
   showView("detail");
