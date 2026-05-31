@@ -1729,8 +1729,8 @@ h1 {
   }
 
   .featured-art {
-    top: 22px;
-    width: 38%;
+    top: 0;
+    width: 42%;
   }
 
   .featured-content {
@@ -1740,16 +1740,16 @@ h1 {
   }
 
   .featured-player {
-    bottom: -118px;
-    width: 224px;
+    bottom: -22px;
+    width: 158px;
   }
 
   .featured-art-left .featured-player {
-    left: -58px;
+    left: -8px;
   }
 
   .featured-art-right .featured-player {
-    right: -58px;
+    right: -8px;
   }
 
   .featured-flag {
