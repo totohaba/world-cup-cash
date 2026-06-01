@@ -129,6 +129,10 @@ function clearSavedPlayer() {
   localStorage.removeItem(STORAGE_KEYS.snapshot);
 }
 
+function clearCachedSnapshot() {
+  localStorage.removeItem(STORAGE_KEYS.snapshot);
+}
+
 function getCachedSnapshot() {
   const saved = localStorage.getItem(STORAGE_KEYS.snapshot);
 
@@ -185,6 +189,27 @@ function renderPlayer(player) {
   availableBalance.textContent = activeProfile
     ? formatMoney(activeProfile.availableToBet)
     : `$${Number(player.current_balance).toFixed(0)}`;
+}
+
+function renderPlayerBalances() {
+  const balance = document.querySelector("#current-balance");
+  const availableBalance = document.querySelector("#available-balance");
+  const savedPlayer = getSavedPlayer();
+
+  if (!balance || !availableBalance) {
+    return;
+  }
+
+  if (activeProfile) {
+    balance.textContent = formatMoney(activeProfile.currentBalance);
+    availableBalance.textContent = formatMoney(activeProfile.availableToBet);
+    return;
+  }
+
+  if (savedPlayer) {
+    balance.textContent = `$${Number(savedPlayer.current_balance).toFixed(0)}`;
+    availableBalance.textContent = `$${Number(savedPlayer.current_balance).toFixed(0)}`;
+  }
 }
 
 function indexPicksByMatch(picks) {
@@ -1263,6 +1288,7 @@ async function handleDetailPlaceBet() {
     const nextStake = optimisticPick.playerCashStake;
     activeProfile.pendingBets = Math.max(0, (Number(activeProfile.pendingBets) || 0) - previousStake + nextStake);
     activeProfile.availableToBet = Math.max(0, (Number(activeProfile.availableToBet) || 0) + previousStake - nextStake);
+    renderPlayerBalances();
     renderPlayerSnapshotStats();
   }
 
@@ -1286,6 +1312,7 @@ async function handleDetailPlaceBet() {
       totalBetAmount: Number(result.pick.total_bet_amount) || 1,
       playerCashStake: Number(result.pick.player_cash_stake) || 0,
     };
+    clearCachedSnapshot();
     status.textContent = `Saved: ${activePicksByMatch[match.matchId].selectedTeamName} for ${formatMoney(result.pick.total_bet_amount)} total bet`;
     renderMatches(activeMatches, activePicksByMatch);
     renderMatchDetail();
@@ -1295,6 +1322,14 @@ async function handleDetailPlaceBet() {
       activePicksByMatch[match.matchId] = previousPick;
     } else {
       delete activePicksByMatch[match.matchId];
+    }
+    if (activeProfile) {
+      const previousStake = previousPick ? Number(previousPick.playerCashStake) || 0 : 0;
+      const nextStake = optimisticPick.playerCashStake;
+      activeProfile.pendingBets = Math.max(0, (Number(activeProfile.pendingBets) || 0) + previousStake - nextStake);
+      activeProfile.availableToBet = Math.max(0, (Number(activeProfile.availableToBet) || 0) - previousStake + nextStake);
+      renderPlayerBalances();
+      renderPlayerSnapshotStats();
     }
     status.textContent = `Could not save pick: ${error.message}`;
     button.disabled = false;
@@ -1381,8 +1416,7 @@ async function loadSummaryData() {
     activePickHistory = historyResult.picks;
     renderProfile(activeProfile);
     renderPickHistory(activePickHistory);
-    document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
-    document.querySelector("#available-balance").textContent = formatMoney(activeProfile.availableToBet);
+    renderPlayerBalances();
     activePicksByMatch = {
       ...activePicksByMatch,
       ...indexPicksByMatch(activePickHistory),
@@ -1441,10 +1475,7 @@ function applyPlayerSnapshot(result, options = {}) {
   renderPlayerSnapshotStats();
   renderPhaseHeader(window.location.hash === "#rules");
 
-  if (activeProfile) {
-    document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
-    document.querySelector("#available-balance").textContent = formatMoney(activeProfile.availableToBet);
-  }
+  renderPlayerBalances();
 }
 
 async function loadGameState() {
