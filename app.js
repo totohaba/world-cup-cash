@@ -653,24 +653,7 @@ function renderLeaderboard(players = activeLeaderboard) {
   }
 
   if (summary) {
-    const leader = players[0];
-    const totalPotential = players.reduce((total, player) => total + (Number(player.potentialPayout) || 0), 0);
-    const totalActivePicks = players.reduce((total, player) => total + (Number(player.activePickCount) || 0), 0);
-    summary.innerHTML = [
-      ["Leader", leader ? leader.displayName : "--"],
-      ["Players", players.length],
-      ["Active Picks", totalActivePicks],
-      ["Potential", formatMoney(totalPotential, { cents: true })],
-    ]
-      .map(([label, value]) => {
-        return `
-          <div class="mini-stat">
-            <span>${label}</span>
-            <strong>${value}</strong>
-          </div>
-        `;
-      })
-      .join("");
+    summary.innerHTML = "";
   }
 
   if (!players.length) {
@@ -678,28 +661,31 @@ function renderLeaderboard(players = activeLeaderboard) {
     return;
   }
 
-  list.innerHTML = players
+  list.innerHTML = `
+    <div class="leaderboard-table-head">
+      <span>Rank</span>
+      <span>Player</span>
+      <span>Current<br />Balance</span>
+      <span>Potential<br />Payout</span>
+    </div>
+    ${players
     .map((player) => {
       const initials = String(player.displayName || "?").trim().slice(0, 1).toUpperCase();
+      const rankClass = player.rank <= 3 ? ` medal medal-${player.rank}` : "";
 
       return `
         <article class="leaderboard-row">
-          <div class="rank">${player.rank}</div>
-          <div class="avatar">${initials}</div>
-          <div>
+          <div class="rank${rankClass}">${player.rank}</div>
+          <div class="leaderboard-player-cell">
             <strong>${player.displayName}</strong>
-            <span>${player.wins}W-${player.losses}L-${player.draws}D - ${player.activePickCount} picks</span>
-            <span>Pending ${formatMoney(player.pendingBets)} - Available ${formatMoney(player.availableToBet)}</span>
           </div>
-          <div class="leaderboard-money">
-            <strong>${formatMoney(player.currentBalance)}</strong>
-            <span>Potential ${formatMoney(player.potentialPayout, { cents: true })}</span>
-            <span>Net ${formatMoney((Number(player.totalWinnings) || 0) - (Number(player.totalLosses) || 0), { cents: true })}</span>
-          </div>
+          <strong class="leaderboard-balance">${formatMoney(player.currentBalance)}</strong>
+          <strong class="leaderboard-potential">${formatMoney(player.potentialPayout, { cents: true })}</strong>
         </article>
       `;
     })
-    .join("");
+    .join("")}
+  `;
 }
 
 function renderProfile(profile = activeProfile) {
@@ -815,7 +801,7 @@ function showView(viewName) {
   });
   document.querySelector(".bottom-nav").hidden = selectedView === "detail";
   document.querySelector(".player-design-header").hidden = selectedView === "detail";
-  document.querySelector(".phase-progress-card").hidden = selectedView === "detail";
+  document.querySelector(".phase-progress-card").hidden = selectedView === "detail" || selectedView === "leaderboard";
 }
 
 function renderMatches(matches, picksByMatch = activePicksByMatch) {
@@ -1333,7 +1319,8 @@ function handleDetailBetInput(event) {
     return;
   }
 
-  const max = Number(input.max) || 1;
+  const savedPick = activePicksByMatch[activeDetailMatchId];
+  const max = getMaxTotalBet(savedPick);
   activeDetailBetAmount = Math.min(max, Math.max(1, Math.floor(Number(input.value) || 1)));
   renderMatchDetail();
 }

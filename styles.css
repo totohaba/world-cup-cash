@@ -696,18 +696,51 @@ h1 {
 
 .leaderboard-list {
   display: grid;
-  gap: 10px;
+  gap: 0;
+}
+
+.leaderboard-table-head,
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 42px minmax(110px, 1fr) 74px 74px;
+  align-items: center;
+}
+
+.leaderboard-table-head {
+  padding: 8px 4px 10px;
+  color: #1c302b;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .leaderboard-row {
-  display: grid;
-  grid-template-columns: 36px 38px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
+  gap: 2px;
+  min-height: 64px;
+  padding: 8px 4px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: white;
+  border-bottom: 0;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.leaderboard-row:nth-child(2) {
+  border-color: var(--gold);
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(90deg, rgba(244, 198, 77, 0.24), rgba(255, 255, 255, 0.92));
+}
+
+.leaderboard-row:nth-child(3) {
+  background: linear-gradient(90deg, rgba(208, 214, 216, 0.32), rgba(255, 255, 255, 0.92));
+}
+
+.leaderboard-row:nth-child(4) {
+  background: linear-gradient(90deg, rgba(194, 120, 51, 0.2), rgba(255, 255, 255, 0.92));
+}
+
+.leaderboard-row:last-child {
+  border-bottom: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
 }
 
 .avatar,
@@ -722,8 +755,9 @@ h1 {
 }
 
 .avatar {
-  width: 38px;
-  height: 38px;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
 }
 
 .leaderboard-row span,
@@ -741,24 +775,54 @@ h1 {
 .rank {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  justify-self: center;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   color: var(--green-dark);
-  background: var(--gold);
+  background: transparent;
   font-weight: 700;
 }
 
-.leaderboard-money {
-  text-align: right;
+.rank.medal {
+  background: var(--gold);
+  box-shadow: 0 2px 0 rgba(120, 83, 8, 0.35);
 }
 
-.leaderboard-money strong {
-  display: block;
+.rank.medal-2 {
+  background: #d8dde0;
+}
+
+.rank.medal-3 {
+  background: #c9854a;
+}
+
+.leaderboard-player-cell {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+}
+
+.leaderboard-player-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-balance,
+.leaderboard-potential {
   color: var(--green);
+  font-size: 13px;
+  text-align: center;
 }
 
-.leaderboard-money span {
+.leaderboard-record {
+  color: var(--green);
+  font-size: 9px;
+  text-align: center;
   white-space: nowrap;
 }
 
