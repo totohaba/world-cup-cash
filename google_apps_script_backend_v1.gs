@@ -242,6 +242,17 @@ function updateObjectRow_(sheetName, rowNumber, item) {
   invalidateSheetCache_(sheetName);
 }
 
+function clearSheetData_(sheetName) {
+  const sheet = getSheet_(sheetName);
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow > 1) {
+    sheet.deleteRows(2, lastRow - 1);
+  }
+
+  invalidateSheetCache_(sheetName);
+}
+
 function csvEscape_(value) {
   const text = value === null || value === undefined ? "" : String(value);
 
@@ -1410,6 +1421,63 @@ function testSettleMatch() {
   return result;
 }
 
+function resetGame(input) {
+  const confirmation = input && input.confirmText ? String(input.confirmText).trim() : "";
+
+  if (confirmation !== "RESET GAME") {
+    throw new Error("Reset requires confirmation text: RESET GAME");
+  }
+
+  const timestamp = nowIso_();
+  const phases = getSheetRows_("Phases")
+    .map((phase, index) => ({ phase, index }))
+    .sort((a, b) => toNumber_(a.phase.phase_order, 0) - toNumber_(b.phase.phase_order, 0));
+
+  if (!phases.length) {
+    throw new Error("Cannot reset without phases.");
+  }
+
+  const firstPhase = phases[0].phase;
+
+  clearSheetData_("Players");
+  clearSheetData_("Picks");
+  clearSheetData_("SettlementLog");
+
+  phases.forEach((item) => {
+    item.phase.status = item.phase.phase_name === firstPhase.phase_name ? "open" : "future";
+    item.phase.opened_at = item.phase.phase_name === firstPhase.phase_name ? timestamp : "";
+    item.phase.locked_at = "";
+    item.phase.settled_at = "";
+    updateObjectRow_("Phases", item.index + 2, item.phase);
+  });
+
+  const matches = getSheetRows_("Matches");
+
+  matches.forEach((match, index) => {
+    match.team_a_goals = "";
+    match.team_b_goals = "";
+    match.team_advanced = "";
+    match.status = match.phase === firstPhase.phase_name ? "open" : "future";
+    updateObjectRow_("Matches", index + 2, match);
+  });
+
+  setSetting_("active_phase", firstPhase.phase_name);
+  setSetting_("game_status", "open");
+  resetRequestCache_();
+
+  return {
+    reset: true,
+    activePhaseName: firstPhase.phase_name,
+    gameStatus: "open",
+    cleared: {
+      players: true,
+      picks: true,
+      settlementLog: true,
+    },
+    resetAt: timestamp,
+  };
+}
+
 function openPhase() {
   const timestamp = nowIso_();
   const phase = updateActivePhase_({
@@ -1659,6 +1727,12 @@ function doGet(e) {
 
     if (action === "lockPhase") {
       return jsonResponse_(lockPhase());
+    }
+
+    if (action === "resetGame") {
+      return jsonResponse_(resetGame({
+        confirmText: e.parameter.confirmText,
+      }));
     }
 
     return jsonResponse_({

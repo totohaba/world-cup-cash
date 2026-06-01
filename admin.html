@@ -67,7 +67,12 @@
             <strong>Download Matches CSV</strong>
             <span>Download the current matches data.</span>
           </button>
-          <button class="admin-control-card danger" type="button" data-admin-tool="resetGame">
+          <button class="admin-control-card" type="button" id="generate-join-link-button">
+            <span class="control-icon">Link</span>
+            <strong>Generate Join Link</strong>
+            <span>Copy a player invite link to text new players.</span>
+          </button>
+          <button class="admin-control-card danger" type="button" id="reset-game-button">
             <span class="control-icon danger">Reset</span>
             <strong>Reset Game</strong>
             <span>Clear test gameplay before the real tournament.</span>
@@ -107,6 +112,6 @@
         <div id="admin-player-list" class="player-roster-list"></div>
       </section>
     </main>
-    <script src="admin.js?v=backend-groups-1"></script>
+    <script src="admin.js?v=reset-invite-1"></script>
   </body>
 </html>

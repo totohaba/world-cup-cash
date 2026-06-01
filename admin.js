@@ -80,6 +80,33 @@ function saveCachedAdminSnapshot(result) {
   }));
 }
 
+function clearCachedAdminSnapshot() {
+  localStorage.removeItem(ADMIN_STORAGE_KEYS.snapshot);
+}
+
+function getJoinLink() {
+  const url = new URL("index.html", window.location.href);
+  url.searchParams.set("invite", "1");
+  return url.toString();
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand("copy");
+  input.remove();
+}
+
 function getAdminTeamNameForSlug(match, slug) {
   if (slug === match.teamASlug) {
     return match.teamA.team;
@@ -533,6 +560,59 @@ async function handleHealthCheckClick() {
   }
 }
 
+async function handleGenerateJoinLinkClick() {
+  const button = document.querySelector("#generate-join-link-button");
+  const status = document.querySelector("#admin-control-status");
+  const originalHtml = button.innerHTML;
+  const link = getJoinLink();
+
+  button.disabled = true;
+  button.innerHTML = `<strong>Copying...</strong>`;
+
+  try {
+    await copyText(link);
+    status.innerHTML = `Join link copied: <a href="${link}">${link}</a>`;
+  } catch (error) {
+    console.error(error);
+    status.innerHTML = `Join link: <a href="${link}">${link}</a>`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalHtml;
+  }
+}
+
+async function handleResetGameClick() {
+  const button = document.querySelector("#reset-game-button");
+  const status = document.querySelector("#admin-control-status");
+  const originalHtml = button.innerHTML;
+  const confirmation = window.prompt("This clears players, picks, settlement logs, and test results. Type RESET GAME to continue.");
+
+  if (confirmation !== "RESET GAME") {
+    status.textContent = "Reset canceled.";
+    return;
+  }
+
+  button.disabled = true;
+  button.innerHTML = `<strong>Resetting...</strong>`;
+  status.textContent = "Resetting game...";
+
+  try {
+    const result = await callAdminApi("resetGame", {
+      confirmText: confirmation,
+    });
+
+    clearCachedAdminSnapshot();
+    status.textContent = `Game reset. Active phase: ${result.activePhaseName}`;
+    await loadAdminMatches();
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Could not reset game: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalHtml;
+  }
+}
+
 async function handleAdminActionClick(event) {
   const button = event.target.closest("[data-admin-action]");
 
@@ -619,7 +699,6 @@ function handleUnavailableAdminTool(event) {
   const messages = {
     uploadTeams: "Upload Teams CSV is in the spec, but this static page still needs the Apps Script upload endpoint.",
     uploadMatches: "Upload Matches CSV is in the spec, but this static page still needs the Apps Script upload endpoint.",
-    resetGame: "Reset Game is in the spec. I am leaving it inactive until the reset endpoint is built with a strong confirmation step.",
   };
 
   status.textContent = messages[tool] || "This admin action is not implemented yet.";
@@ -673,6 +752,8 @@ document.querySelector("#admin-refresh-button")?.addEventListener("click", loadA
 document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
 document.querySelector("#download-matches-button")?.addEventListener("click", handleExportClick);
 document.querySelector("#odds-check-button")?.addEventListener("click", handleHealthCheckClick);
+document.querySelector("#generate-join-link-button")?.addEventListener("click", handleGenerateJoinLinkClick);
+document.querySelector("#reset-game-button")?.addEventListener("click", handleResetGameClick);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);
 document.querySelector(".admin-control-grid")?.addEventListener("click", handleAdminActionClick);
 document.querySelector(".admin-control-grid")?.addEventListener("click", handlePhaseManagerClick);

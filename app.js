@@ -124,6 +124,11 @@ function savePlayer(player) {
   localStorage.setItem(STORAGE_KEYS.player, JSON.stringify(player));
 }
 
+function clearSavedPlayer() {
+  localStorage.removeItem(STORAGE_KEYS.player);
+  localStorage.removeItem(STORAGE_KEYS.snapshot);
+}
+
 function getCachedSnapshot() {
   const saved = localStorage.getItem(STORAGE_KEYS.snapshot);
 
@@ -1414,6 +1419,11 @@ function applyPlayerSnapshot(result, options = {}) {
   activePickHistory = result.pickHistory?.picks || [];
   activeMatches = result.matches?.matches || [];
   activePhases = result.phases?.phases || [];
+
+  if (getSavedPlayer() && !activeProfile) {
+    clearSavedPlayer();
+    renderPlayer(null);
+  }
 
   phaseName.textContent = result.gameState.activePhaseName;
   status.textContent = options.cached
