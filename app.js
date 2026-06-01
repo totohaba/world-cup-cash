@@ -665,8 +665,8 @@ function renderLeaderboard(players = activeLeaderboard) {
     <div class="leaderboard-table-head">
       <span>Rank</span>
       <span>Player</span>
-      <span>Current<br />Balance</span>
-      <span>Potential<br />Payout</span>
+      <span>Balance</span>
+      <span>Payout<br />Potential</span>
     </div>
     ${players
     .map((player) => {
@@ -801,7 +801,30 @@ function showView(viewName) {
   });
   document.querySelector(".bottom-nav").hidden = selectedView === "detail";
   document.querySelector(".player-design-header").hidden = selectedView === "detail";
-  document.querySelector(".phase-progress-card").hidden = selectedView === "detail" || selectedView === "leaderboard";
+  const phaseCard = document.querySelector(".phase-progress-card");
+  phaseCard.hidden = selectedView === "detail" || selectedView === "leaderboard";
+  phaseCard.classList.toggle("rules-phase-card", selectedView === "rules");
+  renderPhaseHeader(selectedView === "rules");
+}
+
+function renderPhaseHeader(isRulesView = false) {
+  const status = document.querySelector("#phase-status");
+  const phaseName = document.querySelector("#phase-name");
+
+  if (!status || !phaseName || !activeGameState) {
+    return;
+  }
+
+  if (isRulesView) {
+    phaseName.textContent = "How to Play";
+    status.textContent = getActivePhaseLockText() || "Locks before each phase";
+    return;
+  }
+
+  phaseName.textContent = activeGameState.activePhaseName || "Group Matchday 1";
+  status.textContent = activeGameState.gameStatus === "locked"
+    ? `Phase locked - ${activeMatches.length} matches`
+    : `${getActivePhaseLockText() || activeGameState.gameStatus} - ${activeMatches.length} matches`;
 }
 
 function renderMatches(matches, picksByMatch = activePicksByMatch) {
@@ -1239,7 +1262,8 @@ async function handleDetailPlaceBet() {
   }
 
   button.disabled = true;
-  status.textContent = "Saving...";
+  button.textContent = previousPick ? "Update Bet" : "Place Bet";
+  status.textContent = `Saved: ${optimisticPick.selectedTeamName} for ${formatMoney(optimisticPick.totalBetAmount)} total bet`;
   renderMatches(activeMatches, activePicksByMatch);
 
   try {
@@ -1405,6 +1429,7 @@ function applyPlayerSnapshot(result, options = {}) {
   renderPhaseTimeline(activePhases);
   renderMatches(activeMatches, activePicksByMatch);
   renderPlayerSnapshotStats();
+  renderPhaseHeader(window.location.hash === "#rules");
 
   if (activeProfile) {
     document.querySelector("#current-balance").textContent = formatMoney(activeProfile.currentBalance);
@@ -1458,6 +1483,7 @@ async function loadGameState() {
         : `${getActivePhaseLockText() || gameState.gameStatus} - ${matchesResult.count} matches`;
     renderPhaseTimeline(activePhases);
     renderMatches(matchesResult.matches, activePicksByMatch);
+    renderPhaseHeader(window.location.hash === "#rules");
   } catch (error) {
     console.error(error);
     status.textContent = `Could not load live data: ${error.message}`;
