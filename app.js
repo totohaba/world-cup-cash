@@ -1,5 +1,5 @@
 const CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbxbKNK_i_OES8W-nLK1kKJNGr-gNfhE9VG3tCoblsfPoTtAwom4l6vN72kGW9bg-fUvpQ/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzGwE5jc5CIfiLPO0T8tgrLoeDj0l-YJfybHK6Ee-4ALg0D1LvDHp6uLKKUvVI3TxuxhQ/exec",
 };
 
 const STORAGE_KEYS = {
@@ -752,11 +752,16 @@ function renderProfile(profile = activeProfile) {
     const initials = String(profile.displayName || "?").trim().slice(0, 1).toUpperCase();
     identity.innerHTML = `
       <div class="profile-avatar">${initials}</div>
-      <div>
-        <span>Display Name</span>
-        <strong>${profile.displayName}</strong>
-      </div>
+      <form class="profile-name-form" data-profile-name-form>
+        <label for="profile-display-name">Display Name</label>
+        <div class="profile-name-controls">
+          <input id="profile-display-name" name="displayName" type="text" maxlength="20" autocomplete="name" required />
+          <button type="submit">Update</button>
+        </div>
+        <span>Maximum 20 characters. Display names must be unique.</span>
+      </form>
     `;
+    identity.querySelector("#profile-display-name").value = profile.displayName;
   }
 
   const winningStakes = activePickHistory.reduce((total, pick) => {
@@ -769,7 +774,7 @@ function renderProfile(profile = activeProfile) {
     ["Current Balance", formatMoney(profile.currentBalance)],
     ["Available to Bet", formatMoney(profile.availableToBet)],
     ["Pending Bets", formatMoney(profile.pendingBets)],
-    ["Total Winnings", formatMoney(netWinnings, { cents: true })],
+    ["Total Winnings", formatMoney(netWinnings)],
     ["Total Losses", formatMoney(profile.totalLosses, { cents: true })],
     ["Record", `${profile.wins}W-${profile.losses}L-${profile.draws}D`],
   ];
@@ -1240,7 +1245,7 @@ async function handleJoinSubmit(event) {
   const submitButton = form.querySelector("button");
   const displayName = input.value.trim();
 
-  if (!displayName) {
+  if (!displayName || displayName.length > 20) {
     return;
   }
 
@@ -1259,10 +1264,56 @@ async function handleJoinSubmit(event) {
     loadSummaryData();
   } catch (error) {
     console.error(error);
-    alert("Could not join the game. Please try again.");
+    alert(error.message);
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "Join Game";
+  }
+}
+
+async function handleProfileNameSubmit(event) {
+  const form = event.target.closest("[data-profile-name-form]");
+
+  if (!form) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const player = getSavedPlayer();
+  const input = form.querySelector("#profile-display-name");
+  const submitButton = form.querySelector("button");
+  const displayName = input.value.trim();
+
+  if (!player || !displayName || displayName.length > 20) {
+    return;
+  }
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Updating...";
+
+  try {
+    const result = await callApi("updatePlayerProfile", {
+      playerId: player.player_id,
+      deviceId: player.device_id,
+      displayName,
+    });
+
+    savePlayer(result.player);
+    clearCachedSnapshot();
+    renderPlayer(result.player);
+
+    if (activeProfile) {
+      activeProfile.displayName = result.player.display_name;
+      renderProfile(activeProfile);
+    }
+
+    await loadGameState();
+  } catch (error) {
+    console.error(error);
+    alert(error.message);
+    submitButton.disabled = false;
+    submitButton.textContent = "Update";
   }
 }
 
@@ -1596,6 +1647,7 @@ document.querySelectorAll(".refresh-data-button").forEach((button) => {
   button.addEventListener("click", loadSummaryData);
 });
 document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmit);
+document.querySelector("#profile-view")?.addEventListener("submit", handleProfileNameSubmit);
 document.querySelector("#matches-list")?.addEventListener("click", handleMatchesListClick);
 document.querySelector("#match-detail-view")?.addEventListener("click", handleMatchDetailClick);
 document.querySelector("#match-detail-view")?.addEventListener("change", handleDetailBetInput);

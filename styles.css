@@ -910,6 +910,45 @@ h1 {
   font-size: 24px;
 }
 
+.profile-name-form {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.profile-name-form label {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.profile-name-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.profile-name-controls input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #8aa399;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+}
+
+.profile-name-controls button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: white;
+  background: var(--green);
+  font-weight: 700;
+}
+
+.profile-name-controls button:disabled {
+  opacity: 0.58;
+}
+
 .stat-card {
   min-height: 84px;
   padding: 12px;

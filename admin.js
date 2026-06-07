@@ -1,5 +1,5 @@
 const ADMIN_CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbxbKNK_i_OES8W-nLK1kKJNGr-gNfhE9VG3tCoblsfPoTtAwom4l6vN72kGW9bg-fUvpQ/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzGwE5jc5CIfiLPO0T8tgrLoeDj0l-YJfybHK6Ee-4ALg0D1LvDHp6uLKKUvVI3TxuxhQ/exec",
 };
 
 const ADMIN_STORAGE_KEYS = {

@@ -942,59 +942,131 @@ function toWholeDollar_(value, fallback) {
   return Math.floor(numberValue);
 }
 
+function validateDisplayName_(value) {
+  const displayName = String(value || "").trim();
+
+  if (!displayName) {
+    throw new Error("Display name cannot be blank.");
+  }
+
+  if (displayName.length > 20) {
+    throw new Error("Display name must be 20 characters or fewer.");
+  }
+
+  return displayName;
+}
+
+function hasDuplicateDisplayName_(players, displayName, excludedPlayerId) {
+  const normalizedName = displayName.toLocaleLowerCase();
+
+  return players.some((player) => {
+    return player.player_id !== excludedPlayerId
+      && String(player.display_name || "").trim().toLocaleLowerCase() === normalizedName;
+  });
+}
+
 function joinGame(input) {
   if (!input || !input.deviceId || !input.displayName) {
     throw new Error("joinGame requires deviceId and displayName.");
   }
 
   const deviceId = String(input.deviceId).trim();
-  const displayName = String(input.displayName).trim();
+  const displayName = validateDisplayName_(input.displayName);
 
   if (!deviceId) {
     throw new Error("deviceId cannot be blank.");
   }
 
-  if (!displayName) {
-    throw new Error("displayName cannot be blank.");
-  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
 
-  const players = getSheetRows_("Players");
-  const existingPlayer = players.find((player) => player.device_id === deviceId);
+  try {
+    const players = getSheetRows_("Players");
+    const existingPlayer = players.find((player) => player.device_id === deviceId);
 
-  if (existingPlayer) {
-    return {
-      created: false,
-      player: existingPlayer,
+    if (existingPlayer) {
+      return {
+        created: false,
+        player: existingPlayer,
+      };
+    }
+
+    if (hasDuplicateDisplayName_(players, displayName, "")) {
+      throw new Error("That display name is already in use.");
+    }
+
+    const startingBalance = getStartingBalance_();
+    const timestamp = nowIso_();
+
+    const player = {
+      player_id: createId_("player"),
+      device_id: deviceId,
+      display_name: displayName,
+      profile_photo_url: "",
+      current_balance: startingBalance,
+      pending_bets: 0,
+      available_to_bet: startingBalance,
+      total_winnings: 0,
+      total_losses: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      joined_at: timestamp,
+      last_seen_at: timestamp,
+      is_admin: false,
     };
+
+    appendObjectRow_("Players", player);
+
+    return {
+      created: true,
+      player,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updatePlayerProfile(input) {
+  if (!input || !input.playerId || !input.deviceId || !input.displayName) {
+    throw new Error("updatePlayerProfile requires playerId, deviceId, and displayName.");
   }
 
-  const startingBalance = getStartingBalance_();
-  const timestamp = nowIso_();
+  const playerId = String(input.playerId).trim();
+  const deviceId = String(input.deviceId).trim();
+  const displayName = validateDisplayName_(input.displayName);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
 
-  const player = {
-    player_id: createId_("player"),
-    device_id: deviceId,
-    display_name: displayName,
-    profile_photo_url: "",
-    current_balance: startingBalance,
-    pending_bets: 0,
-    available_to_bet: startingBalance,
-    total_winnings: 0,
-    total_losses: 0,
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    joined_at: timestamp,
-    last_seen_at: timestamp,
-    is_admin: false,
-  };
+  try {
+    const players = getSheetRows_("Players");
+    const playerIndex = players.findIndex((player) => player.player_id === playerId);
 
-  appendObjectRow_("Players", player);
+    if (playerIndex < 0) {
+      throw new Error("Player not found.");
+    }
 
-  return {
-    created: true,
-    player,
-  };
+    const player = players[playerIndex];
+
+    if (String(player.device_id || "") !== deviceId) {
+      throw new Error("This browser cannot update that profile.");
+    }
+
+    if (hasDuplicateDisplayName_(players, displayName, playerId)) {
+      throw new Error("That display name is already in use.");
+    }
+
+    player.display_name = displayName;
+    player.last_seen_at = nowIso_();
+    updateObjectRow_("Players", playerIndex + 2, player);
+
+    return {
+      updated: true,
+      player,
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function testJoinGame() {
@@ -2423,6 +2495,14 @@ function doGet(e) {
 
     if (action === "joinGame") {
       return jsonResponse_(joinGame({
+        deviceId: e.parameter.deviceId,
+        displayName: e.parameter.displayName,
+      }));
+    }
+
+    if (action === "updatePlayerProfile") {
+      return jsonResponse_(updatePlayerProfile({
+        playerId: e.parameter.playerId,
         deviceId: e.parameter.deviceId,
         displayName: e.parameter.displayName,
       }));
