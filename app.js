@@ -229,13 +229,23 @@ function getPickStatusText(pick) {
   return `Saved: ${pick.selectedTeamName || pick.selectedTeam} for ${formatMoney(pick.totalBetAmount)} total bet`;
 }
 
-function getPickOutcomeText(pick) {
+function getPickNetWinnings(pick) {
+  const payout = Number(pick?.potentialPayout) || 0;
+  const playerCashStake = Number(pick?.playerCashStake) || 0;
+
+  return Math.max(0, payout - playerCashStake);
+}
+
+function getPickOutcomeText(pick, options = {}) {
   if (!pick) {
     return "";
   }
 
   if (pick.status === "won") {
-    return `Won ${formatMoney(pick.potentialPayout, { cents: true })}`;
+    const wonAmount = options.netWinnings
+      ? getPickNetWinnings(pick)
+      : pick.potentialPayout;
+    return `Won ${formatMoney(wonAmount, { cents: true })}`;
   }
 
   if (pick.status === "lost") {
@@ -749,11 +759,17 @@ function renderProfile(profile = activeProfile) {
     `;
   }
 
+  const winningStakes = activePickHistory.reduce((total, pick) => {
+    return pick.status === "won"
+      ? total + (Number(pick.playerCashStake) || 0)
+      : total;
+  }, 0);
+  const netWinnings = Math.max(0, (Number(profile.totalWinnings) || 0) - winningStakes);
   const stats = [
     ["Current Balance", formatMoney(profile.currentBalance)],
     ["Available to Bet", formatMoney(profile.availableToBet)],
     ["Pending Bets", formatMoney(profile.pendingBets)],
-    ["Total Winnings", formatMoney(profile.totalWinnings, { cents: true })],
+    ["Total Winnings", formatMoney(netWinnings, { cents: true })],
     ["Total Losses", formatMoney(profile.totalLosses, { cents: true })],
     ["Record", `${profile.wins}W-${profile.losses}L-${profile.draws}D`],
   ];
@@ -799,7 +815,7 @@ function renderPickHistory(picks = activePickHistory) {
           </div>
           <div class="pick-history-status ${pick.status}">
             ${pick.status}
-            <span>${getPickOutcomeText(pick)}</span>
+            <span>${getPickOutcomeText(pick, { netWinnings: true })}</span>
           </div>
         </article>
       `;
@@ -1138,7 +1154,6 @@ function renderMatchDetail() {
   const payoutClass = activeDetailSelection ? "" : " is-empty";
   const teamAPlayer = getTeamPlayerImage(match, "A");
   const teamBPlayer = getTeamPlayerImage(match, "B");
-  const detailTimeText = matchComplete ? `${match.teamAGoals} - ${match.teamBGoals}` : formatMatchDateTime(match.matchDateTime);
 
   container.innerHTML = `
     <article class="detail-match-hero">
@@ -1152,7 +1167,6 @@ function renderMatchDetail() {
         ${renderDetailFlagBlock(match, "A")}
         <span>${getMatchStageLabel(match)}</span>
         <strong>VS</strong>
-        <span>${detailTimeText}</span>
         ${renderDetailFlagBlock(match, "B")}
       </div>
       ${renderDetailStatsTable(match)}
