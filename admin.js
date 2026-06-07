@@ -1,5 +1,5 @@
 const ADMIN_CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbynkJi6L9o9bHL8y2Srz3tr2qMgipUFexxrR_bUGf30fodG1CVrL2gfFPR0HdNhC_-yGA/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyYEfNEly0bvpRWYwaryFYN2bjnrzFV5E90Y3b9Ehj2Ih8MSUJvh7FmixDCuC4hmR-0ag/exec",
 };
 
 const ADMIN_STORAGE_KEYS = {
@@ -12,6 +12,7 @@ let adminPickSummaryByMatch = {};
 let adminDashboard = null;
 let adminPhases = [];
 let adminPlayers = [];
+let adminOddsUpdateStatus = null;
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -233,6 +234,56 @@ function renderAdminDashboard() {
       `;
     })
     .join("");
+}
+
+function formatAdminTimestamp(value) {
+  if (!value) {
+    return "Never";
+  }
+
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+function renderOddsAlert(status = adminOddsUpdateStatus) {
+  const banner = document.querySelector("#odds-alert-banner");
+
+  if (!banner) {
+    return;
+  }
+
+  if (!status) {
+    banner.hidden = true;
+    banner.innerHTML = "";
+    return;
+  }
+
+  const warnings = status.warnings || [];
+  const warningList = warnings.length
+    ? `<ul>${warnings.map((warning) => `<li>${warning}</li>`).join("")}</ul>`
+    : "";
+  const quotaText = status.requestsRemaining !== "" && status.requestsRemaining != null
+    ? ` - API credits remaining: ${status.requestsRemaining}`
+    : "";
+
+  banner.classList.toggle("ok", Boolean(status.ok));
+  banner.classList.toggle("warning", !status.ok);
+  banner.hidden = false;
+  banner.innerHTML = `
+    <div>
+      <strong>${status.ok ? "Betting odds are current" : "Betting odds need attention"}</strong>
+      <span>Last attempt: ${formatAdminTimestamp(status.lastAttemptAt)} - Last success: ${formatAdminTimestamp(status.lastSuccessAt)}</span>
+      <span>Matches updated: ${status.updatedCount || 0}${quotaText}</span>
+    </div>
+    ${warningList}
+  `;
 }
 
 function renderAdminPhases(phases = adminPhases) {
@@ -488,6 +539,7 @@ function applyAdminSnapshot(result, options = {}) {
   adminDashboard = result.dashboard;
   adminPhases = result.phases?.phases || [];
   adminPlayers = result.players?.players || [];
+  adminOddsUpdateStatus = result.oddsUpdateStatus || null;
   setAdminLoadStatus(options.cached
     ? `Showing saved admin data - refreshing live data...`
     : result.pickSummary?.error
@@ -496,8 +548,43 @@ function applyAdminSnapshot(result, options = {}) {
   renderAdminDashboard();
   renderAdminPhases(adminPhases);
   renderAdminPlayers(adminPlayers);
+  renderOddsAlert(adminOddsUpdateStatus);
   renderAdminMatches(adminMatches);
   renderSettlementLog(result.settlementLog?.logs || []);
+}
+
+async function handleUpdateOddsClick() {
+  const button = document.querySelector("#update-odds-button");
+  const status = document.querySelector("#admin-control-status");
+  const originalHtml = button.innerHTML;
+
+  button.disabled = true;
+  button.innerHTML = `<strong>Updating...</strong>`;
+  status.textContent = "Fetching Pinnacle odds...";
+
+  try {
+    const result = await callAdminApi("updateBettingOdds");
+    adminOddsUpdateStatus = result;
+    renderOddsAlert(result);
+    clearCachedAdminSnapshot();
+    status.textContent = result.warnings?.length
+      ? `Updated ${result.updatedCount} match(es) with ${result.warnings.length} warning(s)`
+      : `Updated ${result.updatedCount} match(es)`;
+    await loadAdminMatches();
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Could not update odds: ${error.message}`;
+
+    try {
+      adminOddsUpdateStatus = await callAdminApi("getOddsUpdateStatus");
+      renderOddsAlert(adminOddsUpdateStatus);
+    } catch (statusError) {
+      console.error(statusError);
+    }
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalHtml;
+  }
 }
 
 async function loadAdminMatches() {
@@ -785,6 +872,7 @@ document.querySelector("#admin-refresh-button")?.addEventListener("click", loadA
 document.querySelector("#log-refresh-button")?.addEventListener("click", loadSettlementLog);
 document.querySelector("#download-matches-button")?.addEventListener("click", handleExportClick);
 document.querySelector("#odds-check-button")?.addEventListener("click", handleHealthCheckClick);
+document.querySelector("#update-odds-button")?.addEventListener("click", handleUpdateOddsClick);
 document.querySelector("#generate-join-link-button")?.addEventListener("click", handleGenerateJoinLinkClick);
 document.querySelector("#reset-game-button")?.addEventListener("click", handleResetGameClick);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);

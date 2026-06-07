@@ -137,6 +137,309 @@ function setSetting_(key, value) {
   updateObjectRow_("Settings", settingIndex + 2, settings[settingIndex]);
 }
 
+const ODDS_API_SPORT_KEY_ = "soccer_fifa_world_cup";
+const ODDS_API_BOOKMAKER_KEY_ = "pinnacle";
+const ODDS_STATUS_PROPERTY_ = "ODDS_UPDATE_STATUS";
+
+function getOddsApiKey_() {
+  const apiKey = PropertiesService.getScriptProperties().getProperty("ODDS_API_KEY");
+
+  if (!apiKey) {
+    throw new Error("Missing ODDS_API_KEY in Apps Script properties.");
+  }
+
+  return apiKey;
+}
+
+function fetchOddsApiJson_(path, params) {
+  const query = Object.entries(params)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+  const response = UrlFetchApp.fetch(`https://api.the-odds-api.com${path}?${query}`, {
+    muteHttpExceptions: true,
+  });
+  const responseCode = response.getResponseCode();
+  const responseText = response.getContentText();
+
+  if (responseCode < 200 || responseCode >= 300) {
+    throw new Error(`The Odds API returned ${responseCode}: ${responseText.slice(0, 300)}`);
+  }
+
+  return {
+    data: JSON.parse(responseText),
+    headers: response.getAllHeaders(),
+  };
+}
+
+function normalizeOddsTeamName_(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function getOddsTeamAliases_() {
+  return {
+    bosniaandherzegovina: "bosnia-herzegovina",
+    caboverde: "cape-verde",
+    capeverdeislands: "cape-verde",
+    congodr: "dr-congo",
+    czechrepublic: "czechia",
+    democraticrepublicofthecongo: "dr-congo",
+    iran: "iran",
+    iriran: "iran",
+    iranislamicrepublicof: "iran",
+    ivorycoast: "cote-divoire",
+    korearepublic: "south-korea",
+    southkorea: "south-korea",
+    turkey: "turkiye",
+    unitedstates: "united-states",
+    unitedstatesofamerica: "united-states",
+    usa: "united-states",
+  };
+}
+
+function getResponseHeader_(headers, name) {
+  const target = String(name).toLowerCase();
+  const key = Object.keys(headers || {}).find((header) => {
+    return String(header).toLowerCase() === target;
+  });
+
+  return key ? headers[key] : "";
+}
+
+function buildOddsTeamIndex_(teams) {
+  const index = { ...getOddsTeamAliases_() };
+
+  teams.forEach((team) => {
+    index[normalizeOddsTeamName_(team.team)] = team.team_slug;
+    index[normalizeOddsTeamName_(team.team_slug)] = team.team_slug;
+  });
+
+  return index;
+}
+
+function parseOddsApiTime_(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function findOddsEventForMatch_(match, events, teamIndex) {
+  const localTeams = [match.team_a, match.team_b].sort().join("|");
+  const kickoff = getMatchKickoff_(match);
+
+  if (!kickoff) {
+    return null;
+  }
+
+  const candidates = events.filter((event) => {
+    const apiTeams = [
+      teamIndex[normalizeOddsTeamName_(event.home_team)],
+      teamIndex[normalizeOddsTeamName_(event.away_team)],
+    ];
+
+    if (apiTeams.some((team) => !team) || apiTeams.sort().join("|") !== localTeams) {
+      return false;
+    }
+
+    const apiKickoff = parseOddsApiTime_(event.commence_time);
+    return apiKickoff && Math.abs(apiKickoff.getTime() - kickoff.getTime()) <= 12 * 60 * 60 * 1000;
+  });
+
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+function getPinnaclePrices_(event, teamIndex) {
+  const bookmaker = (event.bookmakers || []).find((item) => item.key === ODDS_API_BOOKMAKER_KEY_);
+  const market = bookmaker && (bookmaker.markets || []).find((item) => item.key === "h2h");
+
+  if (!market) {
+    return null;
+  }
+
+  const prices = {
+    teamA: null,
+    teamB: null,
+    draw: null,
+    lastUpdate: bookmaker.last_update || "",
+  };
+
+  (market.outcomes || []).forEach((outcome) => {
+    const normalizedName = normalizeOddsTeamName_(outcome.name);
+    const teamSlug = teamIndex[normalizedName];
+
+    if (normalizedName === "draw") {
+      prices.draw = Number(outcome.price) || null;
+    } else if (teamSlug) {
+      prices[teamSlug] = Number(outcome.price) || null;
+    }
+  });
+
+  return prices;
+}
+
+function saveOddsUpdateStatus_(status) {
+  PropertiesService.getScriptProperties().setProperty(
+    ODDS_STATUS_PROPERTY_,
+    JSON.stringify(status)
+  );
+}
+
+function getOddsUpdateStatus() {
+  const saved = PropertiesService.getScriptProperties().getProperty(ODDS_STATUS_PROPERTY_);
+  let status = {
+    ok: false,
+    lastAttemptAt: "",
+    lastSuccessAt: "",
+    updatedCount: 0,
+    warnings: ["Betting odds have not been updated yet."],
+  };
+
+  if (saved) {
+    try {
+      status = { ...status, ...JSON.parse(saved) };
+    } catch (error) {
+      status.warnings = ["Saved odds update status could not be read."];
+    }
+  }
+
+  if (status.lastSuccessAt) {
+    const ageMs = Date.now() - new Date(status.lastSuccessAt).getTime();
+
+    if (ageMs > 36 * 60 * 60 * 1000) {
+      status.ok = false;
+      status.warnings = [
+        ...(status.warnings || []),
+        "The last successful odds update was more than 36 hours ago.",
+      ];
+    }
+  }
+
+  return status;
+}
+
+function updateBettingOdds() {
+  const apiKey = getOddsApiKey_();
+  const attemptedAt = nowIso_();
+  const previousStatus = getOddsUpdateStatus();
+
+  try {
+    const eventsResponse = fetchOddsApiJson_(
+      `/v4/sports/${ODDS_API_SPORT_KEY_}/events`,
+      { apiKey, dateFormat: "iso" }
+    );
+    const oddsResponse = fetchOddsApiJson_(
+      `/v4/sports/${ODDS_API_SPORT_KEY_}/odds`,
+      {
+        apiKey,
+        bookmakers: ODDS_API_BOOKMAKER_KEY_,
+        markets: "h2h",
+        oddsFormat: "decimal",
+        dateFormat: "iso",
+      }
+    );
+    const teams = getSheetRows_("Teams");
+    const matches = getSheetRows_("Matches");
+    const activePhaseName = getSetting_("active_phase");
+    const teamIndex = buildOddsTeamIndex_(teams);
+    const oddsByEventId = indexBy_(oddsResponse.data || [], "id");
+    const warnings = [];
+    const updates = [];
+
+    matches.forEach((match, index) => {
+      const status = String(match.status || "future").toLowerCase();
+
+      if (
+        match.phase !== activePhaseName ||
+        ["final", "settled", "complete"].includes(status) ||
+        isMatchBettingLocked_(match)
+      ) {
+        return;
+      }
+
+      const event = findOddsEventForMatch_(match, eventsResponse.data || [], teamIndex);
+
+      if (!event) {
+        warnings.push(`${match.match_id}: schedule could not be matched.`);
+        return;
+      }
+
+      const oddsEvent = oddsByEventId[event.id];
+      const prices = oddsEvent ? getPinnaclePrices_(oddsEvent, teamIndex) : null;
+      const teamAOdds = prices && prices[match.team_a];
+      const teamBOdds = prices && prices[match.team_b];
+      const isGroupMatch = /group/i.test(String(match.phase || ""));
+
+      if (!prices || !teamAOdds || !teamBOdds || (isGroupMatch && !prices.draw)) {
+        warnings.push(`${match.match_id}: Pinnacle odds are unavailable.`);
+        return;
+      }
+
+      match.team_a_decimal_odds = teamAOdds;
+      match.team_b_decimal_odds = teamBOdds;
+
+      if (prices.draw) {
+        match.draw_decimal_odds = prices.draw;
+      }
+
+      updateObjectRow_("Matches", index + 2, match);
+      updates.push({
+        matchId: match.match_id,
+        teamAOdds,
+        teamBOdds,
+        drawOdds: prices.draw,
+        bookmakerUpdatedAt: prices.lastUpdate,
+      });
+    });
+
+    const status = {
+      ok: warnings.length === 0,
+      lastAttemptAt: attemptedAt,
+      lastSuccessAt: attemptedAt,
+      updatedCount: updates.length,
+      warnings,
+      requestsRemaining: getResponseHeader_(oddsResponse.headers, "x-requests-remaining"),
+      updates,
+    };
+    saveOddsUpdateStatus_(status);
+    return status;
+  } catch (error) {
+    const status = {
+      ok: false,
+      lastAttemptAt: attemptedAt,
+      lastSuccessAt: previousStatus.lastSuccessAt || "",
+      updatedCount: 0,
+      warnings: [error.message],
+    };
+    saveOddsUpdateStatus_(status);
+    throw error;
+  }
+}
+
+function ensureDailyOddsTrigger() {
+  const handler = "runDailyOddsUpdate";
+  const exists = ScriptApp.getProjectTriggers().some((trigger) => {
+    return trigger.getHandlerFunction() === handler;
+  });
+
+  if (!exists) {
+    ScriptApp.newTrigger(handler)
+      .timeBased()
+      .everyDays(1)
+      .atHour(6)
+      .inTimezone("America/Los_Angeles")
+      .create();
+  }
+
+  return { installed: true, alreadyExisted: exists };
+}
+
+function runDailyOddsUpdate() {
+  return updateBettingOdds();
+}
+
 function updateActivePhase_(updates) {
   const activePhaseName = getSetting_("active_phase");
   const phases = getSheetRows_("Phases");
@@ -1192,6 +1495,7 @@ function getAdminSnapshot() {
     phases,
     players,
     settlementLog,
+    oddsUpdateStatus: getOddsUpdateStatus(),
     dashboard: {
       playerCount: gameState.playerCount,
       activeMatchCount: gameState.activeMatchCount,
@@ -1777,6 +2081,14 @@ function doGet(e) {
 
     if (action === "getAdminSnapshot") {
       return jsonResponse_(getAdminSnapshot());
+    }
+
+    if (action === "getOddsUpdateStatus") {
+      return jsonResponse_(getOddsUpdateStatus());
+    }
+
+    if (action === "updateBettingOdds") {
+      return jsonResponse_(updateBettingOdds());
     }
 
     if (action === "getCsvExport") {

@@ -141,6 +141,41 @@ h1 {
   gap: 10px;
 }
 
+.odds-alert-banner {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  border: 1px solid;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.odds-alert-banner[hidden] {
+  display: none;
+}
+
+.odds-alert-banner.ok {
+  border-color: #78a88a;
+  background: #edf8f0;
+}
+
+.odds-alert-banner.warning {
+  border-color: #d6a347;
+  background: #fff7e6;
+}
+
+.odds-alert-banner span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.odds-alert-banner ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
 .admin-current-phase .eyebrow {
   margin: 0;
 }
