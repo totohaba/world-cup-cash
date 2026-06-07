@@ -1,5 +1,5 @@
 const CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbwO2KNbbXQjx3Ep8hWrRoGYC7r14nXug3O0btcJi8wQzkmD0L5c2YoEozFUcAyPNRaveQ/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbynkJi6L9o9bHL8y2Srz3tr2qMgipUFexxrR_bUGf30fodG1CVrL2gfFPR0HdNhC_-yGA/exec",
 };
 
 const STORAGE_KEYS = {
@@ -214,7 +214,9 @@ function renderPlayerBalances() {
 
 function indexPicksByMatch(picks) {
   return picks.reduce((index, pick) => {
-    index[pick.matchId] = pick;
+    if (pick.status !== "cancelled") {
+      index[pick.matchId] = pick;
+    }
     return index;
   }, {});
 }
@@ -242,6 +244,10 @@ function getPickOutcomeText(pick) {
 
   if (pick.status === "draw") {
     return "Draw - no money won or lost";
+  }
+
+  if (pick.status === "cancelled") {
+    return "Removed";
   }
 
   return getPickStatusText(pick);
@@ -381,6 +387,14 @@ function hasFinalScore(match) {
 function isMatchClosed(match) {
   const status = String(match?.status || "").toLowerCase();
   return ["settled", "final", "complete"].includes(status) || hasFinalScore(match);
+}
+
+function isMatchBettingLocked(match) {
+  return Boolean(match?.bettingLocked);
+}
+
+function formatFifaRank(value) {
+  return value ? `#${value}` : "--";
 }
 
 function getKnockoutLabel(phaseName) {
@@ -526,17 +540,7 @@ function getPhaseShortName(phaseName) {
 }
 
 function getActivePhaseLockText() {
-  const activePhase = activePhases.find((phase) => phase.isActive);
-
-  if (!activePhase) {
-    return "";
-  }
-
-  if (activeGameState?.gameStatus === "locked") {
-    return "Phase locked";
-  }
-
-  return activePhase.lockTime ? `Locks: ${activePhase.lockTime}` : "";
+  return "Betting locks 1 hour before each match";
 }
 
 function getImpliedProbability(odds) {
@@ -852,14 +856,12 @@ function renderPhaseHeader(isRulesView = false) {
   }
 
   phaseName.textContent = activeGameState.activePhaseName || "Group Matchday 1";
-  status.textContent = activeGameState.gameStatus === "locked"
-    ? `Phase locked - ${activeMatches.length} matches`
-    : `${getActivePhaseLockText() || activeGameState.gameStatus} - ${activeMatches.length} matches`;
+  status.textContent = `${getActivePhaseLockText()} - ${activeMatches.length} matches`;
 }
 
 function renderMatches(matches, picksByMatch = activePicksByMatch) {
   const list = document.querySelector("#matches-list");
-  const gameLocked = activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
+  const gameLocked = activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
 
   if (!list) {
     return;
@@ -890,7 +892,7 @@ function renderMatches(matches, picksByMatch = activePicksByMatch) {
   list.innerHTML = displayMatches
     .map((match, index) => {
       const matchComplete = isMatchClosed(match);
-      const readOnly = matchComplete || gameLocked;
+      const readOnly = matchComplete || gameLocked || isMatchBettingLocked(match);
       const savedPick = enrichPickWithMatch(picksByMatch[match.matchId], match);
       const finalScore = `${match.teamAGoals} - ${match.teamBGoals}`;
       const pickStatusLabel = getMatchPickStatus(match, savedPick, readOnly);
@@ -1005,12 +1007,11 @@ function renderDetailTeam(match, side, readOnly = false) {
       <h3>${team.team}</h3>
       <button class="${selectedClass}" type="button" data-detail-team="${slug}" ${readOnly ? "disabled" : ""}>Pick ${team.team}</button>
       <dl>
-        <div><dt>FIFA Rank</dt><dd>${team.fifaRank || "--"}</dd></div>
+        <div><dt>FIFA Rank</dt><dd>${formatFifaRank(team.fifaRank)}</dd></div>
         <div><dt>Betting Odds</dt><dd>${odds || "--"}x</dd></div>
         <div><dt>Win Probability</dt><dd>${probability}%</dd></div>
         <div><dt>Nickname</dt><dd>${team.nickname || "--"}</dd></div>
         <div><dt>Star Player</dt><dd>${team.starPlayer || "--"}</dd></div>
-        <div><dt>Position</dt><dd>${team.starPlayerPosition || "--"}</dd></div>
       </dl>
     </div>
   `;
@@ -1085,12 +1086,11 @@ function renderDetailStatsTable(match) {
   const teamAProbability = getImpliedProbability(teamAOdds).toFixed(0);
   const teamBProbability = getImpliedProbability(teamBOdds).toFixed(0);
   const rows = [
-    ["FIFA Rank", teamA.fifaRank || "--", teamB.fifaRank || "--"],
+    ["FIFA Rank", formatFifaRank(teamA.fifaRank), formatFifaRank(teamB.fifaRank)],
     ["Betting Odds", teamAOdds ? `${teamAOdds}x` : "--", teamBOdds ? `${teamBOdds}x` : "--"],
     ["Win Probability", `${teamAProbability}%`, `${teamBProbability}%`],
     ["Nickname", teamA.nickname || "--", teamB.nickname || "--"],
     ["Star Player", teamA.starPlayer || "--", teamB.starPlayer || "--"],
-    ["Position", teamA.starPlayerPosition || "--", teamB.starPlayerPosition || "--"],
   ];
 
   return `
@@ -1120,11 +1120,11 @@ function renderMatchDetail() {
 
   activeDetailMatchId = match.matchId;
   const savedPick = enrichPickWithMatch(
-    activePicksByMatch[match.matchId] || activePickHistory.find((pick) => pick.matchId === match.matchId),
+    activePicksByMatch[match.matchId] || activePickHistory.find((pick) => pick.matchId === match.matchId && pick.status !== "cancelled"),
     match,
   );
   const matchComplete = isMatchClosed(match);
-  const readOnly = matchComplete || activeGameState?.gameStatus === "locked" || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
+  const readOnly = matchComplete || isMatchBettingLocked(match) || activeGameState?.gameStatus === "settling" || activeGameState?.gameStatus === "complete";
 
   if (!activeDetailSelection && savedPick) {
     activeDetailSelection = savedPick.selectedTeam;
@@ -1175,6 +1175,7 @@ function renderMatchDetail() {
         </div>
       </div>
       <p class="detail-selected-copy">${selectedTeamName ? `Selected: ${selectedTeamName}` : "Select a team to place your bet"}</p>
+      <p class="detail-lock-copy">${match.lockTime ? `Betting locks ${match.lockTime}` : ""}</p>
       <button class="place-bet-button" type="button" data-place-bet ${readOnly || !activeDetailSelection ? "disabled" : ""}>
         ${savedPick ? "Update Bet" : "Place Bet"}
       </button>
@@ -1338,6 +1339,47 @@ async function handleDetailPlaceBet() {
   }
 }
 
+async function handleCancelPick() {
+  const player = getSavedPlayer();
+  const match = getDetailMatch();
+  const previousPick = match ? activePicksByMatch[match.matchId] : null;
+
+  if (!player || !match || !previousPick) {
+    activeDetailSelection = "";
+    renderMatchDetail();
+    return;
+  }
+
+  delete activePicksByMatch[match.matchId];
+  activeDetailSelection = "";
+  renderMatches(activeMatches, activePicksByMatch);
+  renderMatchDetail();
+
+  const status = document.querySelector("[data-detail-status]");
+  if (status) {
+    status.textContent = "Removing pick...";
+  }
+
+  try {
+    await callApi("cancelPick", {
+      playerId: player.player_id,
+      matchId: match.matchId,
+    });
+    clearCachedSnapshot();
+    await loadGameState();
+  } catch (error) {
+    console.error(error);
+    activePicksByMatch[match.matchId] = previousPick;
+    activeDetailSelection = previousPick.selectedTeam;
+    await loadGameState();
+    renderMatchDetail();
+    const restoredStatus = document.querySelector("[data-detail-status]");
+    if (restoredStatus) {
+      restoredStatus.textContent = `Could not remove pick: ${error.message}`;
+    }
+  }
+}
+
 function handleMatchesListClick(event) {
   const target = event.target.closest("[data-open-match], [data-open-match-button]");
 
@@ -1356,7 +1398,15 @@ function handleMatchDetailClick(event) {
   const nextButton = event.target.closest("[data-detail-next]");
 
   if (teamButton) {
-    activeDetailSelection = teamButton.dataset.detailTeam;
+    const selectedTeam = teamButton.dataset.detailTeam;
+    const savedPick = activePicksByMatch[activeDetailMatchId];
+
+    if (savedPick?.selectedTeam === selectedTeam && activeDetailSelection === selectedTeam) {
+      handleCancelPick();
+      return;
+    }
+
+    activeDetailSelection = activeDetailSelection === selectedTeam ? "" : selectedTeam;
     renderMatchDetail();
     return;
   }
@@ -1454,7 +1504,7 @@ function applyPlayerSnapshot(result, options = {}) {
   activeMatches = result.matches?.matches || [];
   activePhases = result.phases?.phases || [];
 
-  if (getSavedPlayer() && !activeProfile) {
+  if (getSavedPlayer() && !activeProfile && result.profile?.error === "Player not found.") {
     clearSavedPlayer();
     renderPlayer(null);
   }
@@ -1464,9 +1514,7 @@ function applyPlayerSnapshot(result, options = {}) {
     ? `Showing saved data - refreshing live data...`
     : result.pickSummary?.error
       ? `${result.gameState.gameStatus} - ${result.matches.count} matches - pick activity unavailable`
-      : result.gameState.gameStatus === "locked"
-        ? `Phase locked - ${result.matches.count} matches`
-        : `${getActivePhaseLockText() || result.gameState.gameStatus} - ${result.matches.count} matches`;
+      : `${getActivePhaseLockText()} - ${result.matches.count} matches`;
   renderLeaderboard(activeLeaderboard);
   renderProfile(activeProfile);
   renderPickHistory(activePickHistory);
@@ -1519,9 +1567,7 @@ async function loadGameState() {
       ? `${gameState.gameStatus} - ${matchesResult.count} matches - saved picks unavailable: ${picksResult.error.message}`
       : summaryResult.error
         ? `${gameState.gameStatus} - ${matchesResult.count} matches - pick activity unavailable`
-      : gameState.gameStatus === "locked"
-        ? `Phase locked - ${matchesResult.count} matches`
-        : `${getActivePhaseLockText() || gameState.gameStatus} - ${matchesResult.count} matches`;
+        : `${getActivePhaseLockText()} - ${matchesResult.count} matches`;
     renderPhaseTimeline(activePhases);
     renderMatches(matchesResult.matches, activePicksByMatch);
     renderPhaseHeader(window.location.hash === "#rules");
@@ -1552,6 +1598,32 @@ document.querySelector(".bottom-nav")?.addEventListener("click", (event) => {
   showView(link.dataset.view);
 });
 
-renderPlayer(getSavedPlayer());
-showView(location.hash.replace("#", "") || "matches");
-loadGameState();
+async function recoverPlayerFromUrl() {
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get("recover");
+
+  if (!token) {
+    return;
+  }
+
+  try {
+    const result = await callApi("redeemRecoveryToken", { token });
+    savePlayer(result.player);
+    clearCachedSnapshot();
+  } catch (error) {
+    console.error(error);
+    alert(error.message);
+  } finally {
+    url.searchParams.delete("recover");
+    window.history.replaceState({}, "", url.toString());
+  }
+}
+
+async function startApp() {
+  await recoverPlayerFromUrl();
+  renderPlayer(getSavedPlayer());
+  showView(location.hash.replace("#", "") || "matches");
+  loadGameState();
+}
+
+startApp();

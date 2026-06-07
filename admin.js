@@ -1,5 +1,5 @@
 const ADMIN_CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbwO2KNbbXQjx3Ep8hWrRoGYC7r14nXug3O0btcJi8wQzkmD0L5c2YoEozFUcAyPNRaveQ/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbynkJi6L9o9bHL8y2Srz3tr2qMgipUFexxrR_bUGf30fodG1CVrL2gfFPR0HdNhC_-yGA/exec",
 };
 
 const ADMIN_STORAGE_KEYS = {
@@ -288,11 +288,44 @@ function renderAdminPlayers(players = adminPlayers) {
           <div>
             <strong>${formatAdminMoney(player.currentBalance, { cents: true })}</strong>
             <span>Pending ${formatAdminMoney(player.pendingBets)} - Available ${formatAdminMoney(player.availableToBet)}</span>
+            <button type="button" class="recovery-link-button" data-generate-recovery="${player.playerId}">
+              Generate Recovery Link
+            </button>
           </div>
         </article>
       `;
     })
     .join("");
+}
+
+async function handleRecoveryLinkClick(event) {
+  const button = event.target.closest("[data-generate-recovery]");
+
+  if (!button) {
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Generating...";
+
+  try {
+    const result = await callAdminApi("generateRecoveryToken", {
+      playerId: button.dataset.generateRecovery,
+    });
+    const recoveryUrl = new URL("index.html", window.location.href);
+    recoveryUrl.searchParams.set("recover", result.token);
+    await copyText(recoveryUrl.toString());
+    button.textContent = "Link Copied";
+  } catch (error) {
+    console.error(error);
+    button.textContent = `Error: ${error.message}`;
+  } finally {
+    window.setTimeout(() => {
+      button.disabled = false;
+      button.textContent = originalText;
+    }, 2500);
+  }
 }
 
 function renderHealthCheck(result) {
@@ -759,5 +792,6 @@ document.querySelector(".admin-control-grid")?.addEventListener("click", handleA
 document.querySelector(".admin-control-grid")?.addEventListener("click", handlePhaseManagerClick);
 document.querySelector(".admin-control-grid")?.addEventListener("click", handleUnavailableAdminTool);
 document.querySelector("#admin-phase-list")?.addEventListener("click", handlePhaseManagerClick);
+document.querySelector("#admin-player-list")?.addEventListener("click", handleRecoveryLinkClick);
 
 loadAdminMatches();

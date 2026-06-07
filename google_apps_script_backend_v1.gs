@@ -293,6 +293,55 @@ function nowIso_() {
   return new Date().toISOString();
 }
 
+function getMatchKickoff_(match) {
+  const rawValue = match && match.match_date_time;
+
+  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+    return rawValue;
+  }
+
+  const text = String(rawValue || "").trim().replace(/\s+(PT|PST|PDT)$/i, "");
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return Utilities.parseDate(text, "America/Los_Angeles", "yyyy-MM-dd hh:mm a");
+  } catch (error) {
+    return null;
+  }
+}
+
+function getMatchLockTime_(match) {
+  const kickoff = getMatchKickoff_(match);
+  return kickoff ? new Date(kickoff.getTime() - 60 * 60 * 1000) : null;
+}
+
+function isMatchBettingLocked_(match, now) {
+  const lockTime = getMatchLockTime_(match);
+  return !lockTime || (now || new Date()).getTime() >= lockTime.getTime();
+}
+
+function formatPacificTime_(value) {
+  return value
+    ? Utilities.formatDate(value, "America/Los_Angeles", "MMM d, yyyy h:mm a 'PT'")
+    : "";
+}
+
+function assertMatchBettable_(match) {
+  const matchStatus = String(match.status || "future").trim();
+  const pickableStatuses = ["future", "open", "setup"];
+
+  if (!pickableStatuses.includes(matchStatus) || hasMatchScore_(match)) {
+    throw new Error(`Picks are not allowed for matches with status: ${matchStatus}.`);
+  }
+
+  if (isMatchBettingLocked_(match)) {
+    throw new Error("Betting locked one hour before this match.");
+  }
+}
+
 function randomInt_(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -411,6 +460,7 @@ function hasMatchScore_(match) {
 function normalizeMatch_(match, teamsBySlug) {
   const teamA = teamsBySlug[match.team_a];
   const teamB = teamsBySlug[match.team_b];
+  const lockTime = getMatchLockTime_(match);
 
   return {
     phase: match.phase,
@@ -427,6 +477,8 @@ function normalizeMatch_(match, teamsBySlug) {
     teamBGoals: match.team_b_goals,
     teamAdvanced: match.team_advanced,
     status: match.status || "future",
+    lockTime: formatPacificTime_(lockTime),
+    bettingLocked: isMatchBettingLocked_(match),
   };
 }
 
@@ -509,7 +561,7 @@ function savePick(input) {
   const playerCashStake = Math.max(0, totalBetAmount - houseBetAmount);
   const timestamp = nowIso_();
 
-  if (gameStatus === "locked" || gameStatus === "settling" || gameStatus === "complete") {
+  if (gameStatus === "settling" || gameStatus === "complete") {
     throw new Error(`Picks are not allowed while game status is ${gameStatus}.`);
   }
 
@@ -531,12 +583,7 @@ function savePick(input) {
     throw new Error("Picks are only allowed for the active phase.");
   }
 
-  const matchStatus = String(match.status || "future").trim();
-  const pickableStatuses = ["future", "open", "setup"];
-
-  if (!pickableStatuses.includes(matchStatus) || hasMatchScore_(match)) {
-    throw new Error(`Picks are not allowed for matches with status: ${matchStatus}.`);
-  }
+  assertMatchBettable_(match);
 
   const decimalOdds = getDecimalOddsForSelection_(match, selectedTeam);
   const potentialPayout = totalBetAmount * decimalOdds;
@@ -582,6 +629,48 @@ function savePick(input) {
   return {
     saved: true,
     pick,
+  };
+}
+
+function cancelPick(input) {
+  if (!input || !input.playerId || !input.matchId) {
+    throw new Error("cancelPick requires playerId and matchId.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const matchId = String(input.matchId).trim();
+  const matches = getSheetRows_("Matches");
+  const match = matches.find((item) => item.match_id === matchId);
+
+  if (!match) {
+    throw new Error("Match not found.");
+  }
+
+  if (match.phase !== getSetting_("active_phase")) {
+    throw new Error("Picks can only be removed from the active phase.");
+  }
+
+  assertMatchBettable_(match);
+
+  const picks = getSheetRows_("Picks");
+  const pickIndex = picks.findIndex((pick) => {
+    return pick.player_id === playerId && pick.match_id === matchId && pick.status === "active";
+  });
+
+  if (pickIndex < 0) {
+    throw new Error("Active pick not found.");
+  }
+
+  const pick = picks[pickIndex];
+  pick.status = "cancelled";
+  pick.updated_at = nowIso_();
+  pick.settled_at = "";
+  updateObjectRow_("Picks", pickIndex + 2, pick);
+  updateAllPlayerDerivedBalances_();
+
+  return {
+    cancelled: true,
+    pick: normalizePick_(pick),
   };
 }
 
@@ -917,6 +1006,97 @@ function getPlayersSummary() {
   return {
     count: players.length,
     players,
+  };
+}
+
+function ensureSheetHeaders_(sheetName, requiredHeaders) {
+  const sheet = getSheet_(sheetName);
+  const existingHeaders = getHeaders_(sheetName);
+  const missingHeaders = requiredHeaders.filter((header) => !existingHeaders.includes(header));
+
+  if (!missingHeaders.length) {
+    return;
+  }
+
+  sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+  invalidateSheetCache_(sheetName);
+}
+
+function hashRecoveryToken_(token) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(token),
+    Utilities.Charset.UTF_8
+  );
+
+  return bytes.map((byte) => {
+    const value = byte < 0 ? byte + 256 : byte;
+    return value.toString(16).padStart(2, "0");
+  }).join("");
+}
+
+function generateRecoveryToken(input) {
+  if (!input || !input.playerId) {
+    throw new Error("generateRecoveryToken requires playerId.");
+  }
+
+  ensureSheetHeaders_("Players", [
+    "recovery_token_hash",
+    "recovery_token_created_at",
+    "recovery_token_used_at",
+  ]);
+
+  const playerId = String(input.playerId).trim();
+  const players = getSheetRows_("Players");
+  const playerIndex = players.findIndex((player) => player.player_id === playerId);
+
+  if (playerIndex < 0) {
+    throw new Error("Player not found.");
+  }
+
+  const token = `${Utilities.getUuid()}${Utilities.getUuid()}`.replace(/-/g, "");
+  const player = players[playerIndex];
+  player.recovery_token_hash = hashRecoveryToken_(token);
+  player.recovery_token_created_at = nowIso_();
+  player.recovery_token_used_at = "";
+  updateObjectRow_("Players", playerIndex + 2, player);
+
+  return {
+    playerId,
+    displayName: player.display_name,
+    token,
+  };
+}
+
+function redeemRecoveryToken(input) {
+  if (!input || !input.token) {
+    throw new Error("Recovery token is required.");
+  }
+
+  ensureSheetHeaders_("Players", [
+    "recovery_token_hash",
+    "recovery_token_created_at",
+    "recovery_token_used_at",
+  ]);
+
+  const tokenHash = hashRecoveryToken_(String(input.token).trim());
+  const players = getSheetRows_("Players");
+  const playerIndex = players.findIndex((player) => {
+    return player.recovery_token_hash === tokenHash && !player.recovery_token_used_at;
+  });
+
+  if (playerIndex < 0) {
+    throw new Error("Recovery link is invalid or has already been used.");
+  }
+
+  const player = players[playerIndex];
+  player.recovery_token_hash = "";
+  player.recovery_token_used_at = nowIso_();
+  updateObjectRow_("Players", playerIndex + 2, player);
+
+  return {
+    recovered: true,
+    player,
   };
 }
 
@@ -1630,6 +1810,25 @@ function doGet(e) {
         matchId: e.parameter.matchId,
         selectedTeam: e.parameter.selectedTeam,
         totalBetAmount: e.parameter.totalBetAmount,
+      }));
+    }
+
+    if (action === "cancelPick") {
+      return jsonResponse_(cancelPick({
+        playerId: e.parameter.playerId,
+        matchId: e.parameter.matchId,
+      }));
+    }
+
+    if (action === "generateRecoveryToken") {
+      return jsonResponse_(generateRecoveryToken({
+        playerId: e.parameter.playerId,
+      }));
+    }
+
+    if (action === "redeemRecoveryToken") {
+      return jsonResponse_(redeemRecoveryToken({
+        token: e.parameter.token,
       }));
     }
 
