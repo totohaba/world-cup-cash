@@ -1164,9 +1164,11 @@ function renderMatchDetail() {
     <article class="detail-match-hero">
       <div class="detail-player-art detail-player-art-left">
         ${teamAPlayer ? `<img class="detail-player" src="${teamAPlayer}" alt="" loading="lazy" />` : ""}
+        <img class="detail-player-overlay" src="assets/left-overlay.png" alt="" />
       </div>
       <div class="detail-player-art detail-player-art-right">
         ${teamBPlayer ? `<img class="detail-player" src="${teamBPlayer}" alt="" loading="lazy" />` : ""}
+        <img class="detail-player-overlay detail-player-overlay-right" src="assets/right-overlay.png" alt="" />
       </div>
       <div class="detail-match-meta">
         ${renderDetailFlagBlock(match, "A")}
