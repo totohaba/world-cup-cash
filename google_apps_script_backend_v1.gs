@@ -140,6 +140,8 @@ function setSetting_(key, value) {
 const ODDS_API_SPORT_KEY_ = "soccer_fifa_world_cup";
 const ODDS_API_BOOKMAKER_KEY_ = "pinnacle";
 const ODDS_STATUS_PROPERTY_ = "ODDS_UPDATE_STATUS";
+const SCORE_STATUS_PROPERTY_ = "SCORE_CHECK_STATUS";
+const SCORE_STATE_PROPERTY_ = "SCORE_CHECK_STATE";
 
 function getOddsApiKey_() {
   const apiKey = PropertiesService.getScriptProperties().getProperty("ODDS_API_KEY");
@@ -438,6 +440,282 @@ function ensureDailyOddsTrigger() {
 
 function runDailyOddsUpdate() {
   return updateBettingOdds();
+}
+
+function isGroupPhase_(phaseName) {
+  return /group/i.test(String(phaseName || ""));
+}
+
+function getScoreCheckState_() {
+  const saved = PropertiesService.getScriptProperties().getProperty(SCORE_STATE_PROPERTY_);
+
+  if (!saved) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(saved);
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveScoreCheckState_(state) {
+  PropertiesService.getScriptProperties().setProperty(
+    SCORE_STATE_PROPERTY_,
+    JSON.stringify(state)
+  );
+}
+
+function saveScoreCheckStatus_(status) {
+  PropertiesService.getScriptProperties().setProperty(
+    SCORE_STATUS_PROPERTY_,
+    JSON.stringify(status)
+  );
+}
+
+function getScoreCheckStatus() {
+  const saved = PropertiesService.getScriptProperties().getProperty(SCORE_STATUS_PROPERTY_);
+  let status = {
+    ok: true,
+    lastAttemptAt: "",
+    lastSuccessAt: "",
+    checkedCount: 0,
+    importedCount: 0,
+    warnings: [],
+  };
+
+  if (saved) {
+    try {
+      status = { ...status, ...JSON.parse(saved) };
+    } catch (error) {
+      status.ok = false;
+      status.warnings = ["Saved score check status could not be read."];
+    }
+  }
+
+  const activePhaseName = getSetting_("active_phase");
+  const tiedKnockouts = getSheetRows_("Matches").filter((match) => {
+    return (
+      match.phase === activePhaseName &&
+      !isGroupPhase_(match.phase) &&
+      String(match.status || "").toLowerCase() === "final" &&
+      Number(match.team_a_goals) === Number(match.team_b_goals) &&
+      !match.team_advanced
+    );
+  });
+
+  if (tiedKnockouts.length) {
+    status.ok = false;
+    status.warnings = [
+      ...(status.warnings || []).filter((warning) => !/advancing team/i.test(warning)),
+      ...tiedKnockouts.map((match) => `${match.match_id}: select the advancing team before settlement.`),
+    ];
+  }
+
+  return status;
+}
+
+function getEligibleScoreChecks_(options) {
+  const force = Boolean(options && options.force);
+  const now = new Date();
+  const activePhaseName = getSetting_("active_phase");
+  const state = getScoreCheckState_();
+  const matches = getSheetRows_("Matches");
+
+  return matches
+    .map((match, index) => ({ match, index }))
+    .filter(({ match }) => {
+      const status = String(match.status || "future").toLowerCase();
+
+      if (
+        match.phase !== activePhaseName ||
+        ["final", "settled", "complete"].includes(status) ||
+        hasMatchScore_(match)
+      ) {
+        return false;
+      }
+
+      const kickoff = getMatchKickoff_(match);
+
+      if (!kickoff) {
+        return false;
+      }
+
+      const matchState = state[match.match_id] || {};
+      const due120 = new Date(kickoff.getTime() + 120 * 60 * 1000);
+      const due180 = new Date(kickoff.getTime() + 180 * 60 * 1000);
+
+      if (isGroupPhase_(match.phase)) {
+        return now >= due120 && (force || !matchState.checked120At);
+      }
+
+      if (matchState.awaitingTieRecheck) {
+        return now >= due180 && (force || !matchState.checked180At);
+      }
+
+      return now >= due120 && (force || !matchState.checked120At);
+    });
+}
+
+function getScoreForTeam_(event, teamSlug, teamIndex) {
+  const score = (event.scores || []).find((item) => {
+    return teamIndex[normalizeOddsTeamName_(item.name)] === teamSlug;
+  });
+
+  if (!score || score.score === "" || score.score == null) {
+    return null;
+  }
+
+  const value = Number(score.score);
+  return Number.isFinite(value) ? value : null;
+}
+
+function checkMatchScores(input) {
+  const force = String(input && input.force || "") === "true";
+  const eligible = getEligibleScoreChecks_({ force });
+  const attemptedAt = nowIso_();
+  const previousStatus = getScoreCheckStatus();
+
+  if (!eligible.length) {
+    const status = {
+      ok: true,
+      lastAttemptAt: attemptedAt,
+      lastSuccessAt: previousStatus.lastSuccessAt || "",
+      checkedCount: 0,
+      importedCount: 0,
+      warnings: [],
+      requestsRemaining: previousStatus.requestsRemaining || "",
+    };
+    saveScoreCheckStatus_(status);
+    return status;
+  }
+
+  try {
+    const response = fetchOddsApiJson_(
+      `/v4/sports/${ODDS_API_SPORT_KEY_}/scores`,
+      {
+        apiKey: getOddsApiKey_(),
+        daysFrom: 3,
+        dateFormat: "iso",
+      }
+    );
+    const teams = getSheetRows_("Teams");
+    const teamIndex = buildOddsTeamIndex_(teams);
+    const state = getScoreCheckState_();
+    const warnings = [];
+    const imports = [];
+    const now = new Date();
+
+    eligible.forEach(({ match, index }) => {
+      const kickoff = getMatchKickoff_(match);
+      const due180 = new Date(kickoff.getTime() + 180 * 60 * 1000);
+      const matchState = state[match.match_id] || {};
+      const isSecondCheck = !isGroupPhase_(match.phase) && matchState.awaitingTieRecheck && now >= due180;
+      const event = findOddsEventForMatch_(match, response.data || [], teamIndex);
+
+      if (isSecondCheck) {
+        matchState.checked180At = attemptedAt;
+      } else {
+        matchState.checked120At = attemptedAt;
+      }
+
+      if (!event) {
+        warnings.push(`${match.match_id}: score event could not be matched.`);
+        state[match.match_id] = matchState;
+        return;
+      }
+
+      const teamAGoals = getScoreForTeam_(event, match.team_a, teamIndex);
+      const teamBGoals = getScoreForTeam_(event, match.team_b, teamIndex);
+
+      if (teamAGoals === null || teamBGoals === null) {
+        warnings.push(`${match.match_id}: scores are not available yet.`);
+        state[match.match_id] = matchState;
+        return;
+      }
+
+      if (!event.completed) {
+        if (!isGroupPhase_(match.phase) && teamAGoals === teamBGoals && !isSecondCheck) {
+          matchState.awaitingTieRecheck = true;
+        }
+
+        warnings.push(`${match.match_id}: match is not marked complete yet.`);
+        state[match.match_id] = matchState;
+        return;
+      }
+
+      if (!isGroupPhase_(match.phase) && teamAGoals === teamBGoals && !isSecondCheck) {
+        matchState.awaitingTieRecheck = true;
+        warnings.push(`${match.match_id}: tied knockout will be checked again 180 minutes after kickoff.`);
+        state[match.match_id] = matchState;
+        return;
+      }
+
+      match.team_a_goals = teamAGoals;
+      match.team_b_goals = teamBGoals;
+      match.status = "final";
+      updateObjectRow_("Matches", index + 2, match);
+      matchState.awaitingTieRecheck = false;
+      matchState.importedAt = attemptedAt;
+      state[match.match_id] = matchState;
+      imports.push({
+        matchId: match.match_id,
+        teamAGoals,
+        teamBGoals,
+      });
+
+      if (!isGroupPhase_(match.phase) && teamAGoals === teamBGoals) {
+        warnings.push(`${match.match_id}: select the advancing team before settlement.`);
+      }
+    });
+
+    saveScoreCheckState_(state);
+    const status = {
+      ok: warnings.length === 0,
+      lastAttemptAt: attemptedAt,
+      lastSuccessAt: attemptedAt,
+      checkedCount: eligible.length,
+      importedCount: imports.length,
+      warnings,
+      requestsRemaining: getResponseHeader_(response.headers, "x-requests-remaining"),
+      imports,
+    };
+    saveScoreCheckStatus_(status);
+    return status;
+  } catch (error) {
+    const status = {
+      ok: false,
+      lastAttemptAt: attemptedAt,
+      lastSuccessAt: previousStatus.lastSuccessAt || "",
+      checkedCount: 0,
+      importedCount: 0,
+      warnings: [error.message],
+      requestsRemaining: previousStatus.requestsRemaining || "",
+    };
+    saveScoreCheckStatus_(status);
+    throw error;
+  }
+}
+
+function ensureScoreCheckTrigger() {
+  const handler = "runScheduledScoreCheck";
+  const exists = ScriptApp.getProjectTriggers().some((trigger) => {
+    return trigger.getHandlerFunction() === handler;
+  });
+
+  if (!exists) {
+    ScriptApp.newTrigger(handler)
+      .timeBased()
+      .everyMinutes(30)
+      .create();
+  }
+
+  return { installed: true, alreadyExisted: exists };
+}
+
+function runScheduledScoreCheck() {
+  return checkMatchScores({ force: "false" });
 }
 
 function updateActivePhase_(updates) {
@@ -1496,6 +1774,7 @@ function getAdminSnapshot() {
     players,
     settlementLog,
     oddsUpdateStatus: getOddsUpdateStatus(),
+    scoreCheckStatus: getScoreCheckStatus(),
     dashboard: {
       playerCount: gameState.playerCount,
       activeMatchCount: gameState.activeMatchCount,
@@ -1598,7 +1877,22 @@ function getMatchOutcome_(match) {
     throw new Error("Match must have both team scores before settlement.");
   }
 
+  if (!isGroupPhase_(match.phase) && match.team_advanced) {
+    if (![match.team_a, match.team_b].includes(match.team_advanced)) {
+      throw new Error("Selected advancing team is not in this match.");
+    }
+
+    return {
+      type: "win_loss",
+      winningTeam: match.team_advanced,
+    };
+  }
+
   if (teamAGoals === teamBGoals) {
+    if (!isGroupPhase_(match.phase)) {
+      throw new Error("Tied knockout matches require an advancing team before settlement.");
+    }
+
     return {
       type: "draw",
       winningTeam: "",
@@ -1875,9 +2169,15 @@ function saveMatchResult(input) {
     throw new Error("Match is already settled.");
   }
 
+  const teamAdvanced = input.teamAdvanced ? String(input.teamAdvanced).trim() : "";
+
+  if (teamAdvanced && ![match.team_a, match.team_b].includes(teamAdvanced)) {
+    throw new Error("Selected advancing team is not in this match.");
+  }
+
   match.team_a_goals = teamAGoals;
   match.team_b_goals = teamBGoals;
-  match.team_advanced = input.teamAdvanced ? String(input.teamAdvanced).trim() : match.team_advanced;
+  match.team_advanced = teamAdvanced;
   match.status = "final";
   updateObjectRow_("Matches", matchIndex + 2, match);
 
@@ -1926,6 +2226,8 @@ function resetGame(input) {
   clearSheetData_("Players");
   clearSheetData_("Picks");
   clearSheetData_("SettlementLog");
+  PropertiesService.getScriptProperties().deleteProperty(SCORE_STATUS_PROPERTY_);
+  PropertiesService.getScriptProperties().deleteProperty(SCORE_STATE_PROPERTY_);
 
   phases.forEach((item) => {
     item.phase.status = item.phase.phase_name === firstPhase.phase_name ? "open" : "future";
@@ -2089,6 +2391,16 @@ function doGet(e) {
 
     if (action === "updateBettingOdds") {
       return jsonResponse_(updateBettingOdds());
+    }
+
+    if (action === "getScoreCheckStatus") {
+      return jsonResponse_(getScoreCheckStatus());
+    }
+
+    if (action === "checkMatchScores") {
+      return jsonResponse_(checkMatchScores({
+        force: e.parameter.force,
+      }));
     }
 
     if (action === "getCsvExport") {

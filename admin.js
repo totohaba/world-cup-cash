@@ -1,5 +1,5 @@
 const ADMIN_CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyYEfNEly0bvpRWYwaryFYN2bjnrzFV5E90Y3b9Ehj2Ih8MSUJvh7FmixDCuC4hmR-0ag/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbxbKNK_i_OES8W-nLK1kKJNGr-gNfhE9VG3tCoblsfPoTtAwom4l6vN72kGW9bg-fUvpQ/exec",
 };
 
 const ADMIN_STORAGE_KEYS = {
@@ -13,6 +13,7 @@ let adminDashboard = null;
 let adminPhases = [];
 let adminPlayers = [];
 let adminOddsUpdateStatus = null;
+let adminScoreCheckStatus = null;
 
 async function callAdminApi(action, params = {}) {
   const url = new URL(ADMIN_CONFIG.appsScriptUrl);
@@ -135,6 +136,7 @@ function renderAdminMatches(matches) {
   list.innerHTML = matches
     .map((match) => {
       const settled = match.status === "settled";
+      const isGroupMatch = /group/i.test(String(match.phase || ""));
       const teamAGoals = match.teamAGoals ?? "";
       const teamBGoals = match.teamBGoals ?? "";
       const summary = adminPickSummaryByMatch[match.matchId];
@@ -171,6 +173,16 @@ function renderAdminMatches(matches) {
               <input type="number" min="0" step="1" value="${teamBGoals}" data-team-b-goals ${settled ? "disabled" : ""} />
             </label>
           </div>
+          ${isGroupMatch ? "" : `
+          <label class="advanced-team-field">
+            Team advanced
+            <select data-team-advanced ${settled ? "disabled" : ""}>
+              <option value="">Select team</option>
+              <option value="${match.teamASlug}" ${match.teamAdvanced === match.teamASlug ? "selected" : ""}>${match.teamA.team}</option>
+              <option value="${match.teamBSlug}" ${match.teamAdvanced === match.teamBSlug ? "selected" : ""}>${match.teamB.team}</option>
+            </select>
+          </label>
+          `}
           <div class="admin-match-actions">
             <button type="button" data-save-score ${settled ? "disabled" : ""}>Save Score</button>
             <button type="button" data-settle-match ${settled ? "disabled" : ""}>
@@ -281,6 +293,40 @@ function renderOddsAlert(status = adminOddsUpdateStatus) {
       <strong>${status.ok ? "Betting odds are current" : "Betting odds need attention"}</strong>
       <span>Last attempt: ${formatAdminTimestamp(status.lastAttemptAt)} - Last success: ${formatAdminTimestamp(status.lastSuccessAt)}</span>
       <span>Matches updated: ${status.updatedCount || 0}${quotaText}</span>
+    </div>
+    ${warningList}
+  `;
+}
+
+function renderScoreAlert(status = adminScoreCheckStatus) {
+  const banner = document.querySelector("#score-alert-banner");
+
+  if (!banner) {
+    return;
+  }
+
+  if (!status || (!status.lastAttemptAt && !(status.warnings || []).length)) {
+    banner.hidden = true;
+    banner.innerHTML = "";
+    return;
+  }
+
+  const warnings = status.warnings || [];
+  const warningList = warnings.length
+    ? `<ul>${warnings.map((warning) => `<li>${warning}</li>`).join("")}</ul>`
+    : "";
+  const quotaText = status.requestsRemaining !== "" && status.requestsRemaining != null
+    ? ` - API credits remaining: ${status.requestsRemaining}`
+    : "";
+
+  banner.classList.toggle("ok", Boolean(status.ok));
+  banner.classList.toggle("warning", !status.ok);
+  banner.hidden = false;
+  banner.innerHTML = `
+    <div>
+      <strong>${status.ok ? "Match score check complete" : "Match scores need attention"}</strong>
+      <span>Last attempt: ${formatAdminTimestamp(status.lastAttemptAt)} - Last success: ${formatAdminTimestamp(status.lastSuccessAt)}</span>
+      <span>Checked: ${status.checkedCount || 0} - Results imported: ${status.importedCount || 0}${quotaText}</span>
     </div>
     ${warningList}
   `;
@@ -540,6 +586,7 @@ function applyAdminSnapshot(result, options = {}) {
   adminPhases = result.phases?.phases || [];
   adminPlayers = result.players?.players || [];
   adminOddsUpdateStatus = result.oddsUpdateStatus || null;
+  adminScoreCheckStatus = result.scoreCheckStatus || null;
   setAdminLoadStatus(options.cached
     ? `Showing saved admin data - refreshing live data...`
     : result.pickSummary?.error
@@ -549,8 +596,43 @@ function applyAdminSnapshot(result, options = {}) {
   renderAdminPhases(adminPhases);
   renderAdminPlayers(adminPlayers);
   renderOddsAlert(adminOddsUpdateStatus);
+  renderScoreAlert(adminScoreCheckStatus);
   renderAdminMatches(adminMatches);
   renderSettlementLog(result.settlementLog?.logs || []);
+}
+
+async function handleCheckScoresClick() {
+  const button = document.querySelector("#check-scores-button");
+  const status = document.querySelector("#admin-control-status");
+  const originalHtml = button.innerHTML;
+
+  button.disabled = true;
+  button.innerHTML = `<strong>Checking...</strong>`;
+  status.textContent = "Checking eligible match scores...";
+
+  try {
+    const result = await callAdminApi("checkMatchScores", { force: "true" });
+    adminScoreCheckStatus = result;
+    renderScoreAlert(result);
+    clearCachedAdminSnapshot();
+    status.textContent = result.warnings?.length
+      ? `Imported ${result.importedCount} result(s) with ${result.warnings.length} warning(s)`
+      : `Imported ${result.importedCount} result(s)`;
+    await loadAdminMatches();
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Could not check scores: ${error.message}`;
+
+    try {
+      adminScoreCheckStatus = await callAdminApi("getScoreCheckStatus");
+      renderScoreAlert(adminScoreCheckStatus);
+    } catch (statusError) {
+      console.error(statusError);
+    }
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalHtml;
+  }
 }
 
 async function handleUpdateOddsClick() {
@@ -837,6 +919,7 @@ async function handleSettleClick(event) {
   const matchId = card.dataset.matchId;
   const teamAGoals = card.querySelector("[data-team-a-goals]").value;
   const teamBGoals = card.querySelector("[data-team-b-goals]").value;
+  const teamAdvanced = card.querySelector("[data-team-advanced]")?.value || "";
 
   if (shouldSettle && !confirm("Save this score and settle all active picks for this match?")) {
     return;
@@ -852,6 +935,7 @@ async function handleSettleClick(event) {
           matchId,
           teamAGoals,
           teamBGoals,
+          teamAdvanced,
           settle: shouldSettle ? "true" : "false",
         });
 
@@ -873,6 +957,7 @@ document.querySelector("#log-refresh-button")?.addEventListener("click", loadSet
 document.querySelector("#download-matches-button")?.addEventListener("click", handleExportClick);
 document.querySelector("#odds-check-button")?.addEventListener("click", handleHealthCheckClick);
 document.querySelector("#update-odds-button")?.addEventListener("click", handleUpdateOddsClick);
+document.querySelector("#check-scores-button")?.addEventListener("click", handleCheckScoresClick);
 document.querySelector("#generate-join-link-button")?.addEventListener("click", handleGenerateJoinLinkClick);
 document.querySelector("#reset-game-button")?.addEventListener("click", handleResetGameClick);
 document.querySelector("#admin-matches-list")?.addEventListener("click", handleSettleClick);

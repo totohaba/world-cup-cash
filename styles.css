@@ -1926,6 +1926,22 @@ h1 {
   font: inherit;
 }
 
+.advanced-team-field {
+  display: grid;
+  gap: 6px;
+  max-width: 320px;
+  color: var(--green);
+  font-weight: 700;
+}
+
+.advanced-team-field select {
+  width: 100%;
+  border: 1px solid #8aa399;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+}
+
 .admin-match-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

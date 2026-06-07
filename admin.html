@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash Admin</title>
-    <link rel="stylesheet" href="styles.css?v=odds-api-1" />
+    <link rel="stylesheet" href="styles.css?v=score-api-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -17,6 +17,7 @@
       </header>
 
       <section id="odds-alert-banner" class="odds-alert-banner" hidden aria-live="polite"></section>
+      <section id="score-alert-banner" class="odds-alert-banner score-alert-banner" hidden aria-live="polite"></section>
 
       <section class="phase-card admin-current-phase">
         <p class="eyebrow">Current Phase</p>
@@ -58,6 +59,11 @@
             <span class="control-icon">Odds</span>
             <strong>Update Betting Odds</strong>
             <span>Fetch current Pinnacle odds now.</span>
+          </button>
+          <button class="admin-control-card" type="button" id="check-scores-button">
+            <span class="control-icon">Score</span>
+            <strong>Check Match Scores</strong>
+            <span>Check eligible active-phase matches now.</span>
           </button>
           <button class="admin-control-card" type="button" data-settle-final-matches>
             <span class="control-icon">Cup</span>
@@ -114,6 +120,6 @@
         <div id="admin-player-list" class="player-roster-list"></div>
       </section>
     </main>
-    <script src="admin.js?v=odds-api-1"></script>
+    <script src="admin.js?v=score-api-1"></script>
   </body>
 </html>
