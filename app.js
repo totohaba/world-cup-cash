@@ -1,10 +1,11 @@
 const CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzGwE5jc5CIfiLPO0T8tgrLoeDj0l-YJfybHK6Ee-4ALg0D1LvDHp6uLKKUvVI3TxuxhQ/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyHQRoa-z3UjPeX1l4brcz_Onm43Q24QBH2r078XvWZffqsIr-UFo-oDAEwbwIZO8scQQ/exec",
 };
 
 const STORAGE_KEYS = {
   deviceId: "worldCupCashDeviceId",
   player: "worldCupCashPlayer",
+  managedPlayers: "worldCupCashManagedPlayers",
   snapshot: "worldCupCashPlayerSnapshot",
 };
 
@@ -124,8 +125,46 @@ function savePlayer(player) {
   localStorage.setItem(STORAGE_KEYS.player, JSON.stringify(player));
 }
 
+function getManagedPlayers() {
+  const saved = localStorage.getItem(STORAGE_KEYS.managedPlayers);
+
+  if (!saved) {
+    return [];
+  }
+
+  try {
+    const players = JSON.parse(saved);
+    return Array.isArray(players) ? players : [];
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEYS.managedPlayers);
+    return [];
+  }
+}
+
+function saveManagedPlayers(players) {
+  if (players?.length > 1) {
+    localStorage.setItem(STORAGE_KEYS.managedPlayers, JSON.stringify(players));
+    return;
+  }
+
+  localStorage.removeItem(STORAGE_KEYS.managedPlayers);
+}
+
+function updateManagedPlayer(updatedPlayer) {
+  const players = getManagedPlayers();
+
+  if (!players.length) {
+    return;
+  }
+
+  saveManagedPlayers(players.map((player) => {
+    return player.player_id === updatedPlayer.player_id ? updatedPlayer : player;
+  }));
+}
+
 function clearSavedPlayer() {
   localStorage.removeItem(STORAGE_KEYS.player);
+  localStorage.removeItem(STORAGE_KEYS.managedPlayers);
   localStorage.removeItem(STORAGE_KEYS.snapshot);
 }
 
@@ -750,6 +789,21 @@ function renderProfile(profile = activeProfile) {
 
   if (identity) {
     const initials = String(profile.displayName || "?").trim().slice(0, 1).toUpperCase();
+    const savedPlayer = getSavedPlayer();
+    const managedPlayers = getManagedPlayers();
+    const switcher = managedPlayers.length > 1
+      ? `
+        <div class="profile-player-switcher">
+          <span>Switch Player</span>
+          <div class="profile-player-options">
+            ${managedPlayers.map((player) => {
+              const isActive = player.player_id === savedPlayer?.player_id;
+              return `<button class="${isActive ? "active" : ""}" type="button" data-switch-player="${player.player_id}">${player.display_name}</button>`;
+            }).join("")}
+          </div>
+        </div>
+      `
+      : "";
     identity.innerHTML = `
       <div class="profile-avatar">${initials}</div>
       <form class="profile-name-form" data-profile-name-form>
@@ -759,6 +813,7 @@ function renderProfile(profile = activeProfile) {
           <button type="submit">Update</button>
         </div>
         <span>Maximum 20 characters. Display names must be unique.</span>
+        ${switcher}
       </form>
     `;
     identity.querySelector("#profile-display-name").value = profile.displayName;
@@ -1260,6 +1315,7 @@ async function handleJoinSubmit(event) {
       displayName,
     });
 
+    saveManagedPlayers([]);
     savePlayer(result.player);
     renderPlayer(result.player);
     renderMatches(activeMatches);
@@ -1302,6 +1358,7 @@ async function handleProfileNameSubmit(event) {
     });
 
     savePlayer(result.player);
+    updateManagedPlayer(result.player);
     clearCachedSnapshot();
     renderPlayer(result.player);
 
@@ -1317,6 +1374,27 @@ async function handleProfileNameSubmit(event) {
     submitButton.disabled = false;
     submitButton.textContent = "Update";
   }
+}
+
+async function handleProfileClick(event) {
+  const switchButton = event.target.closest("[data-switch-player]");
+
+  if (!switchButton) {
+    return;
+  }
+
+  const player = getManagedPlayers().find((item) => {
+    return item.player_id === switchButton.dataset.switchPlayer;
+  });
+
+  if (!player || player.player_id === getSavedPlayer()?.player_id) {
+    return;
+  }
+
+  savePlayer(player);
+  clearCachedSnapshot();
+  renderPlayer(player);
+  await loadGameState();
 }
 
 async function handleDetailPlaceBet() {
@@ -1571,6 +1649,10 @@ function applyPlayerSnapshot(result, options = {}) {
   activeMatches = result.matches?.matches || [];
   activePhases = result.phases?.phases || [];
 
+  if (result.managedPlayers?.length > 1) {
+    saveManagedPlayers(result.managedPlayers);
+  }
+
   if (getSavedPlayer() && !activeProfile && result.profile?.error === "Player not found.") {
     clearSavedPlayer();
     renderPlayer(null);
@@ -1650,6 +1732,7 @@ document.querySelectorAll(".refresh-data-button").forEach((button) => {
 });
 document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmit);
 document.querySelector("#profile-view")?.addEventListener("submit", handleProfileNameSubmit);
+document.querySelector("#profile-view")?.addEventListener("click", handleProfileClick);
 document.querySelector("#matches-list")?.addEventListener("click", handleMatchesListClick);
 document.querySelector("#match-detail-view")?.addEventListener("click", handleMatchDetailClick);
 document.querySelector("#match-detail-view")?.addEventListener("change", handleDetailBetInput);
@@ -1676,6 +1759,7 @@ async function recoverPlayerFromUrl() {
 
   try {
     const result = await callApi("redeemRecoveryToken", { token });
+    saveManagedPlayers(result.managedPlayers || []);
     savePlayer(result.player);
     clearCachedSnapshot();
   } catch (error) {

@@ -965,6 +965,80 @@ function hasDuplicateDisplayName_(players, displayName, excludedPlayerId) {
   });
 }
 
+function ensureManagedDadAccount_() {
+  ensureSheetHeaders_("Players", [
+    "managed_by_player_id",
+    "managed_player_role",
+  ]);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const players = getSheetRows_("Players");
+    const managerIndex = players.findIndex((player) => {
+      return player.managed_player_role === "manager"
+        || String(player.display_name || "").trim().toLocaleLowerCase() === "dat haba";
+    });
+
+    if (managerIndex < 0) {
+      return [];
+    }
+
+    const manager = players[managerIndex];
+
+    if (manager.managed_player_role !== "manager") {
+      manager.managed_player_role = "manager";
+      updateObjectRow_("Players", managerIndex + 2, manager);
+    }
+
+    let dad = players.find((player) => player.managed_by_player_id === manager.player_id);
+
+    if (!dad) {
+      const existingDad = players.find((player) => {
+        return String(player.display_name || "").trim().toLocaleLowerCase() === "dad";
+      });
+
+      if (existingDad) {
+        throw new Error("The display name Dad is already in use by another player.");
+      }
+
+      const startingBalance = getStartingBalance_();
+      const timestamp = nowIso_();
+      dad = {
+        player_id: createId_("player"),
+        device_id: manager.device_id,
+        display_name: "Dad",
+        profile_photo_url: "",
+        current_balance: startingBalance,
+        pending_bets: 0,
+        available_to_bet: startingBalance,
+        total_winnings: 0,
+        total_losses: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        joined_at: timestamp,
+        last_seen_at: timestamp,
+        is_admin: false,
+        managed_by_player_id: manager.player_id,
+        managed_player_role: "managed",
+      };
+      appendObjectRow_("Players", dad);
+    }
+
+    return [manager, dad];
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getManagedPlayersFor_(playerId) {
+  const managedPlayers = ensureManagedDadAccount_();
+  const hasAccess = managedPlayers.some((player) => player.player_id === playerId);
+  return hasAccess ? managedPlayers : [];
+}
+
 function joinGame(input) {
   if (!input || !input.deviceId || !input.displayName) {
     throw new Error("joinGame requires deviceId and displayName.");
@@ -1700,6 +1774,7 @@ function generateRecoveryToken(input) {
   ]);
 
   const playerId = String(input.playerId).trim();
+  getManagedPlayersFor_(playerId);
   const players = getSheetRows_("Players");
   const playerIndex = players.findIndex((player) => player.player_id === playerId);
 
@@ -1746,10 +1821,12 @@ function redeemRecoveryToken(input) {
   player.recovery_token_hash = "";
   player.recovery_token_used_at = nowIso_();
   updateObjectRow_("Players", playerIndex + 2, player);
+  const managedPlayers = getManagedPlayersFor_(player.player_id);
 
   return {
     recovered: true,
     player,
+    managedPlayers,
   };
 }
 
@@ -1782,6 +1859,7 @@ function getPickSummarySafely_(phaseName) {
 
 function getPlayerSnapshot(input) {
   const playerId = input && input.playerId ? String(input.playerId).trim() : "";
+  const managedPlayers = playerId ? getManagedPlayersFor_(playerId) : [];
   const gameState = getGameState();
   const matches = getMatches({
     phase: gameState.activePhaseName,
@@ -1823,6 +1901,7 @@ function getPlayerSnapshot(input) {
     playerPicks,
     pickHistory,
     profile,
+    managedPlayers,
   };
 }
 
