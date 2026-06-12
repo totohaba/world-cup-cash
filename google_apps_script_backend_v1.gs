@@ -659,14 +659,28 @@ function checkMatchScores(input) {
       matchState.awaitingTieRecheck = false;
       matchState.importedAt = attemptedAt;
       state[match.match_id] = matchState;
-      imports.push({
+      const imported = {
         matchId: match.match_id,
         teamAGoals,
         teamBGoals,
-      });
+        settled: false,
+        settledPickCount: 0,
+      };
+      imports.push(imported);
 
       if (!isGroupPhase_(match.phase) && teamAGoals === teamBGoals) {
         warnings.push(`${match.match_id}: select the advancing team before settlement.`);
+        return;
+      }
+
+      try {
+        const settlement = settleMatch({
+          matchId: match.match_id,
+        });
+        imported.settled = true;
+        imported.settledPickCount = settlement.settledPickCount;
+      } catch (error) {
+        warnings.push(`${match.match_id}: score imported but automatic settlement failed: ${error.message}`);
       }
     });
 
@@ -677,6 +691,7 @@ function checkMatchScores(input) {
       lastSuccessAt: attemptedAt,
       checkedCount: eligible.length,
       importedCount: imports.length,
+      settledCount: imports.filter((item) => item.settled).length,
       warnings,
       requestsRemaining: getResponseHeader_(response.headers, "x-requests-remaining"),
       imports,
