@@ -1566,6 +1566,44 @@ function getPlayerPickHistory(input) {
   };
 }
 
+function getPublicSettledPicks(input) {
+  if (!input || !input.playerId) {
+    throw new Error("getPublicSettledPicks requires playerId.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const player = getSheetRows_("Players").find((item) => item.player_id === playerId);
+
+  if (!player) {
+    throw new Error("Player not found.");
+  }
+
+  const settledStatuses = ["won", "lost", "draw"];
+  const matches = getSheetRows_("Matches");
+  const teamsBySlug = indexBy_(getSheetRows_("Teams"), "team_slug");
+  const matchesById = indexBy_(matches, "match_id");
+  const picks = getSheetRows_("Picks")
+    .filter((pick) => {
+      return pick.player_id === playerId
+        && settledStatuses.includes(String(pick.status || "").toLowerCase());
+    })
+    .map((pick) => {
+      const match = matchesById[pick.match_id];
+      return {
+        ...normalizePick_(pick),
+        match: match ? normalizeMatch_(match, teamsBySlug) : null,
+      };
+    })
+    .sort((a, b) => String(b.settledAt || "").localeCompare(String(a.settledAt || "")));
+
+  return {
+    playerId,
+    displayName: player.display_name,
+    count: picks.length,
+    picks,
+  };
+}
+
 function getPhasePickSummary(input) {
   const activePhaseName = getSetting_("active_phase");
   const phaseName = input && input.phase ? String(input.phase).trim() : activePhaseName;
@@ -2641,6 +2679,12 @@ function doGet(e) {
       return jsonResponse_(getPlayerPickHistory({
         playerId: e.parameter.playerId,
         phase: e.parameter.phase,
+      }));
+    }
+
+    if (action === "getPublicSettledPicks") {
+      return jsonResponse_(getPublicSettledPicks({
+        playerId: e.parameter.playerId,
       }));
     }
 
