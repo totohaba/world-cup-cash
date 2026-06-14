@@ -850,13 +850,30 @@ h1 {
   min-width: 0;
 }
 
-.leaderboard-player-cell strong {
+.leaderboard-player-cell button {
   min-width: 0;
+  width: 100%;
+  border: 0;
+  padding: 8px 0;
   overflow: hidden;
   color: var(--text);
+  background: transparent;
+  font-family: inherit;
   font-size: 12px;
+  font-weight: 700;
+  text-align: left;
   text-overflow: ellipsis;
+  text-decoration: underline;
+  text-decoration-color: rgba(19, 83, 67, 0.38);
+  text-underline-offset: 3px;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.leaderboard-player-cell button:hover,
+.leaderboard-player-cell button:focus-visible {
+  color: var(--green);
+  text-decoration-color: currentColor;
 }
 
 .leaderboard-balance,
@@ -1138,6 +1155,55 @@ h1 {
   color: #6d5b18;
 }
 
+.player-picks-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  align-items: center;
+  padding: 18px;
+  background: rgba(3, 22, 16, 0.72);
+}
+
+.player-picks-overlay[hidden] {
+  display: none;
+}
+
+.player-picks-dialog {
+  width: min(100%, 560px);
+  max-height: min(78vh, 720px);
+  margin: 0 auto;
+  overflow-y: auto;
+  border: 2px solid var(--gold);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--cream);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.38);
+}
+
+.player-picks-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.player-picks-heading h2 {
+  margin: 0;
+  color: var(--green);
+}
+
+.player-picks-close {
+  border: 0;
+  padding: 4px 8px;
+  color: var(--green);
+  background: transparent;
+  font-family: "Arial Black", Impact, Arial, sans-serif;
+  font-size: 26px;
+  cursor: pointer;
+}
+
 .match-card {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -1399,19 +1465,30 @@ h1 {
   text-align: center;
 }
 
-.detail-match-meta > span,
-.detail-match-meta > strong {
+.detail-match-center {
   grid-column: 2;
-  transform: translateY(34px);
+  grid-row: 1 / 5;
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  transform: translateY(8px);
 }
 
-.detail-match-meta strong {
+.detail-match-center > span {
+  white-space: nowrap;
+}
+
+.detail-match-center strong {
   font-family: "Arial Black", Impact, Arial, sans-serif;
   font-size: 28px;
 }
 
-.detail-match-meta > span:last-of-type {
-  white-space: nowrap;
+.detail-match-center .detail-final-score {
+  color: var(--gold);
+  font-family: "Arial Black", Impact, Arial, sans-serif;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .detail-player-art {
@@ -2057,7 +2134,7 @@ h1 {
     font-size: 9px;
   }
 
-  .leaderboard-player-cell strong {
+  .leaderboard-player-cell button {
     font-size: 11px;
   }
 

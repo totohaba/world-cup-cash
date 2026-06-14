@@ -1,5 +1,5 @@
 const CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbxTNaKa24BE4CoKcL_mR0hsKvqYVb1XD3sEi4kodv-SLRGf9PqgQ_9FpN5H2dAiArsW/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbymIh5xXGZ-0jRHPMCyMllyuYFtOhvU4wVY-rhX_kVuXfIF7iBvDLshy9y8JOaOHq3Akg/exec",
 };
 
 const STORAGE_KEYS = {
@@ -760,7 +760,7 @@ function renderLeaderboard(players = activeLeaderboard) {
         <article class="leaderboard-row">
           <div class="rank${rankClass}">${player.rank}</div>
           <div class="leaderboard-player-cell">
-            <strong>${player.displayName}</strong>
+            <button type="button" data-view-player-picks="${player.playerId}">${player.displayName}</button>
           </div>
           <strong class="leaderboard-balance">${formatMoney(player.currentBalance)}</strong>
           <strong class="leaderboard-potential">${formatMoney(player.potentialPayout, { cents: true })}</strong>
@@ -769,6 +769,36 @@ function renderLeaderboard(players = activeLeaderboard) {
     })
     .join("")}
   `;
+}
+
+function renderPickHistoryRows(picks, emptyMessage = "No picks yet.") {
+  if (!picks.length) {
+    return `<p class="empty-state">${emptyMessage}</p>`;
+  }
+
+  return picks
+    .map((pick) => {
+      const match = pick.match;
+      const label = match
+        ? `${match.teamA.team} vs ${match.teamB.team}`
+        : pick.matchId;
+      const selectedTeamName = match ? getTeamNameForSlug(match, pick.selectedTeam) : pick.selectedTeam;
+      const amount = `${formatMoney(pick.totalBetAmount)} at ${pick.decimalOdds}x`;
+
+      return `
+        <article class="pick-history-row">
+          <div>
+            <strong>${label}</strong>
+            <span>Pick: ${selectedTeamName} - ${amount}</span>
+          </div>
+          <div class="pick-history-status ${pick.status}">
+            ${pick.status}
+            <span>${getPickOutcomeText(pick, { netWinnings: true })}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 }
 
 function renderProfile(profile = activeProfile) {
@@ -853,34 +883,39 @@ function renderPickHistory(picks = activePickHistory) {
     return;
   }
 
-  if (!picks.length) {
-    list.innerHTML = `<p class="empty-state">No picks yet.</p>`;
+  list.innerHTML = renderPickHistoryRows(picks);
+}
+
+async function openPlayerPicks(playerId) {
+  const overlay = document.querySelector("#player-picks-overlay");
+  const title = document.querySelector("#player-picks-title");
+  const list = document.querySelector("#player-picks-list");
+
+  if (!overlay || !title || !list) {
     return;
   }
 
-  list.innerHTML = picks
-    .map((pick) => {
-      const match = pick.match;
-      const label = match
-        ? `${match.teamA.team} vs ${match.teamB.team}`
-        : pick.matchId;
-      const selectedTeamName = match ? getTeamNameForSlug(match, pick.selectedTeam) : pick.selectedTeam;
-      const amount = `${formatMoney(pick.totalBetAmount)} at ${pick.decimalOdds}x`;
+  const player = activeLeaderboard.find((item) => item.playerId === playerId);
+  title.textContent = `${player?.displayName || "Player"} Picks`;
+  list.innerHTML = `<p class="empty-state">Loading settled picks...</p>`;
+  overlay.hidden = false;
 
-      return `
-        <article class="pick-history-row">
-          <div>
-            <strong>${label}</strong>
-            <span>Pick: ${selectedTeamName} - ${amount}</span>
-          </div>
-          <div class="pick-history-status ${pick.status}">
-            ${pick.status}
-            <span>${getPickOutcomeText(pick, { netWinnings: true })}</span>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  try {
+    const result = await callApi("getPublicSettledPicks", { playerId });
+    title.textContent = `${result.displayName} Picks`;
+    list.innerHTML = renderPickHistoryRows(result.picks || [], "No settled picks yet.");
+  } catch (error) {
+    console.error(error);
+    list.innerHTML = `<p class="empty-state">Could not load settled picks.</p>`;
+  }
+}
+
+function closePlayerPicks() {
+  const overlay = document.querySelector("#player-picks-overlay");
+
+  if (overlay) {
+    overlay.hidden = true;
+  }
 }
 
 function showView(viewName) {
@@ -1227,8 +1262,13 @@ function renderMatchDetail() {
       </div>
       <div class="detail-match-meta">
         ${renderDetailFlagBlock(match, "A")}
-        <span>${getMatchStageLabel(match)}</span>
-        <strong>VS</strong>
+        <div class="detail-match-center">
+          <span>${getMatchStageLabel(match)}</span>
+          <strong>VS</strong>
+          ${String(match.status || "").toLowerCase() === "settled" && hasFinalScore(match)
+            ? `<span class="detail-final-score">${match.teamAGoals} - ${match.teamBGoals}</span>`
+            : ""}
+        </div>
         ${renderDetailFlagBlock(match, "B")}
       </div>
       ${renderDetailStatsTable(match)}
@@ -1536,6 +1576,20 @@ function handleMatchesListClick(event) {
   openMatchDetail(matchId);
 }
 
+function handleLeaderboardClick(event) {
+  const playerButton = event.target.closest("[data-view-player-picks]");
+
+  if (playerButton) {
+    openPlayerPicks(playerButton.dataset.viewPlayerPicks);
+  }
+}
+
+function handlePlayerPicksOverlayClick(event) {
+  if (event.target.closest("[data-close-player-picks]") || event.target.id === "player-picks-overlay") {
+    closePlayerPicks();
+  }
+}
+
 function handleMatchDetailClick(event) {
   const teamButton = event.target.closest("[data-detail-team]");
   const placeBetButton = event.target.closest("[data-place-bet]");
@@ -1734,10 +1788,17 @@ document.querySelector("#join-form")?.addEventListener("submit", handleJoinSubmi
 document.querySelector("#profile-view")?.addEventListener("submit", handleProfileNameSubmit);
 document.querySelector("#profile-view")?.addEventListener("click", handleProfileClick);
 document.querySelector("#matches-list")?.addEventListener("click", handleMatchesListClick);
+document.querySelector("#leaderboard-list")?.addEventListener("click", handleLeaderboardClick);
+document.querySelector("#player-picks-overlay")?.addEventListener("click", handlePlayerPicksOverlayClick);
 document.querySelector("#match-detail-view")?.addEventListener("click", handleMatchDetailClick);
 document.querySelector("#match-detail-view")?.addEventListener("change", handleDetailBetInput);
 document.querySelector("#match-detail-view")?.addEventListener("input", handleDetailBetInput);
 document.querySelector("#detail-close-button")?.addEventListener("click", closeMatchDetail);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closePlayerPicks();
+  }
+});
 document.querySelector(".bottom-nav")?.addEventListener("click", (event) => {
   const link = event.target.closest("[data-view]");
 

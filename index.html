@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Cup Cash</title>
-    <link rel="stylesheet" href="styles.css?v=profile-name-1" />
+    <link rel="stylesheet" href="styles.css?v=settled-picks-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -71,6 +71,16 @@
         <div id="leaderboard-summary" class="mini-stat-row"></div>
         <div id="leaderboard-list" class="leaderboard-list"></div>
       </section>
+
+      <div id="player-picks-overlay" class="player-picks-overlay" hidden>
+        <section class="player-picks-dialog" role="dialog" aria-modal="true" aria-labelledby="player-picks-title">
+          <div class="player-picks-heading">
+            <h2 id="player-picks-title">Player Picks</h2>
+            <button class="player-picks-close" type="button" data-close-player-picks aria-label="Close player picks">X</button>
+          </div>
+          <div id="player-picks-list" class="pick-history-list"></div>
+        </section>
+      </div>
 
       <section id="profile-view" class="app-view panel" hidden>
         <h2>My Profile</h2>
@@ -167,6 +177,6 @@
       </nav>
     </main>
 
-    <script src="app.js?v=profile-name-1"></script>
+    <script src="app.js?v=settled-picks-1"></script>
   </body>
 </html>
