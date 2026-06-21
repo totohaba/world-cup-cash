@@ -1789,6 +1789,150 @@ function getPlayersSummary() {
   };
 }
 
+function ensureBalanceAdjustmentsSheet_() {
+  const sheetName = "BalanceAdjustments";
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    invalidateSheetCache_(sheetName);
+  }
+
+  if (sheet.getLastRow() < 1 || sheet.getLastColumn() < 1) {
+    sheet.getRange(1, 1, 1, 8).setValues([[
+      "adjustment_id",
+      "player_id",
+      "display_name",
+      "amount",
+      "starting_balance",
+      "ending_balance",
+      "note",
+      "created_at",
+    ]]);
+    invalidateSheetCache_(sheetName);
+  }
+
+  ensureSheetHeaders_(sheetName, [
+    "adjustment_id",
+    "player_id",
+    "display_name",
+    "amount",
+    "starting_balance",
+    "ending_balance",
+    "note",
+    "created_at",
+  ]);
+
+  return sheetName;
+}
+
+function adjustPlayerBalance(input) {
+  if (!input || !input.playerId || input.amount === undefined || input.amount === null) {
+    throw new Error("adjustPlayerBalance requires playerId and amount.");
+  }
+
+  const playerId = String(input.playerId).trim();
+  const expectedDisplayName = String(input.displayName || "").trim();
+  const amount = Number(input.amount);
+  const note = String(input.note || "").trim();
+  const adjustmentId = String(input.adjustmentId || "").trim();
+
+  if (!playerId) {
+    throw new Error("playerId cannot be blank.");
+  }
+
+  if (!Number.isFinite(amount) || amount === 0) {
+    throw new Error("amount must be a non-zero number.");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const adjustmentSheetName = ensureBalanceAdjustmentsSheet_();
+
+    if (adjustmentId) {
+      const existingAdjustment = getSheetRows_(adjustmentSheetName).find((row) => {
+        return String(row.adjustment_id || "").trim() === adjustmentId;
+      });
+
+      if (existingAdjustment) {
+        return {
+          skipped: true,
+          adjustmentId,
+          playerId: existingAdjustment.player_id,
+          displayName: existingAdjustment.display_name,
+          amount: toNumber_(existingAdjustment.amount, 0),
+          startingBalance: toNumber_(existingAdjustment.starting_balance, 0),
+          endingBalance: toNumber_(existingAdjustment.ending_balance, 0),
+          note: existingAdjustment.note,
+        };
+      }
+    }
+
+    const players = getSheetRows_("Players");
+    const playerIndex = players.findIndex((player) => player.player_id === playerId);
+
+    if (playerIndex < 0) {
+      throw new Error("Player not found.");
+    }
+
+    const player = players[playerIndex];
+    const displayName = String(player.display_name || "").trim();
+
+    if (expectedDisplayName && displayName.toLocaleLowerCase() !== expectedDisplayName.toLocaleLowerCase()) {
+      throw new Error(`Player display name mismatch. Expected ${expectedDisplayName}, found ${displayName}.`);
+    }
+
+    const startingBalance = toNumber_(player.current_balance, getStartingBalance_());
+    const endingBalance = Math.round((startingBalance + amount) * 100) / 100;
+    const activePicks = getActivePicks_();
+    const activity = getPlayerActivity_(playerId, activePicks);
+
+    player.current_balance = endingBalance;
+    player.pending_bets = activity.pendingBets;
+    player.available_to_bet = endingBalance - activity.pendingBets;
+    updateObjectRow_("Players", playerIndex + 2, player);
+
+    const resolvedAdjustmentId = adjustmentId || createId_("adjustment");
+    appendObjectRow_(adjustmentSheetName, {
+      adjustment_id: resolvedAdjustmentId,
+      player_id: playerId,
+      display_name: displayName,
+      amount,
+      starting_balance: startingBalance,
+      ending_balance: endingBalance,
+      note,
+      created_at: nowIso_(),
+    });
+
+    return {
+      skipped: false,
+      adjustmentId: resolvedAdjustmentId,
+      playerId,
+      displayName,
+      amount,
+      startingBalance,
+      endingBalance,
+      availableToBet: player.available_to_bet,
+      note,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addDatManualTopUp200() {
+  return adjustPlayerBalance({
+    adjustmentId: "manual-dat-topup-2026-06-20",
+    playerId: "player_5ade3c20-5624-4acf-a280-cd5085840761",
+    displayName: "Dat",
+    amount: 200,
+    note: "Manual top-up requested by admin on 2026-06-20.",
+  });
+}
+
 function ensureSheetHeaders_(sheetName, requiredHeaders) {
   const sheet = getSheet_(sheetName);
   const existingHeaders = getHeaders_(sheetName);
@@ -2700,6 +2844,20 @@ function doGet(e) {
 
     if (action === "getPlayersSummary") {
       return jsonResponse_(getPlayersSummary());
+    }
+
+    if (action === "adjustPlayerBalance") {
+      return jsonResponse_(adjustPlayerBalance({
+        adjustmentId: e.parameter.adjustmentId,
+        playerId: e.parameter.playerId,
+        displayName: e.parameter.displayName,
+        amount: e.parameter.amount,
+        note: e.parameter.note,
+      }));
+    }
+
+    if (action === "addDatManualTopUp200") {
+      return jsonResponse_(addDatManualTopUp200());
     }
 
     if (action === "getSettlementLog") {

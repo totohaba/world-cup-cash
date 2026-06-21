@@ -1,5 +1,5 @@
 const CONFIG = {
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbymIh5xXGZ-0jRHPMCyMllyuYFtOhvU4wVY-rhX_kVuXfIF7iBvDLshy9y8JOaOHq3Akg/exec",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbwiJBMglXs0HLJxkkgHEMxE655zBRHzYKdDmln9Yx93u4MBMsjqRk3SoFnNCivNb6OAXg/exec",
 };
 
 const STORAGE_KEYS = {
@@ -763,7 +763,7 @@ function renderLeaderboard(players = activeLeaderboard) {
             <button type="button" data-view-player-picks="${player.playerId}">${player.displayName}</button>
           </div>
           <strong class="leaderboard-balance">${formatMoney(player.currentBalance)}</strong>
-          <strong class="leaderboard-potential">${formatMoney(player.potentialPayout, { cents: true })}</strong>
+          <strong class="leaderboard-potential">${formatMoney(player.potentialPayout)}</strong>
         </article>
       `;
     })

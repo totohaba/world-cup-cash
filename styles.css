@@ -738,7 +738,7 @@ h1 {
 .leaderboard-table-head,
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 44px minmax(98px, 1fr) 72px 76px;
+  grid-template-columns: 44px minmax(108px, 1fr) 82px 82px;
   align-items: center;
 }
 
@@ -859,7 +859,7 @@ h1 {
   color: var(--text);
   background: transparent;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
   text-align: left;
   text-overflow: ellipsis;
@@ -881,7 +881,7 @@ h1 {
   min-width: 0;
   overflow: hidden;
   color: var(--green);
-  font-size: 13px;
+  font-size: 16px;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2127,7 +2127,7 @@ h1 {
 @media (max-width: 420px) {
   .leaderboard-table-head,
   .leaderboard-row {
-    grid-template-columns: 40px minmax(88px, 1fr) 66px 72px;
+    grid-template-columns: 40px minmax(92px, 1fr) 72px 74px;
   }
 
   .leaderboard-table-head {
@@ -2135,12 +2135,12 @@ h1 {
   }
 
   .leaderboard-player-cell button {
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .leaderboard-balance,
   .leaderboard-potential {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .avatar {
